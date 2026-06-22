@@ -25,7 +25,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from core.camera import CameraLoop
+from core.camera import CameraLoop, probe_cameras
 from core.state import GameState
 from core.ws_manager import WSManager
 
@@ -114,6 +114,28 @@ async def start_battle(req: StartBattleRequest) -> dict[str, Any]:
 async def set_calibration(y_ratio: float) -> dict[str, Any]:
     camera_loop.set_calibration(y_ratio)
     return {"ok": True, "calibration_y_ratio": camera_loop.calibration_y_ratio}
+
+
+@app.get("/cameras")
+async def list_cameras() -> dict[str, Any]:
+    """利用可能なカメラを UUID 付きで列挙して返す。
+
+    プローブ前に realign を実行し、active_uuid の現在の index と稼働中の
+    cap がズレていれば張り直す(USB 抜き差しによる index 変動への対応)。
+    プローブは数秒かかることがある。
+    """
+    realign_result = await camera_loop.realign()
+    cams = await asyncio.to_thread(probe_cameras, camera_loop.active_uuid)
+    return {
+        "active_uuid": camera_loop.active_uuid,
+        "cameras": cams,
+        "realign": realign_result,
+    }
+
+
+@app.post("/cameras/select")
+async def select_camera(uuid: str) -> dict[str, Any]:
+    return await camera_loop.switch_camera(uuid)
 
 
 @app.websocket("/ws/live")

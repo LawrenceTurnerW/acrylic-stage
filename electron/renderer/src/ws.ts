@@ -11,6 +11,7 @@ export type ServerEvent =
       calibration_y_ratio: number;
       frame_jpeg_b64: string;
       detections: ArucoDetection[];
+      active_uuid: string | null;
     };
 
 export type ArucoDetection = {

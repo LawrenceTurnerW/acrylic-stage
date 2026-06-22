@@ -8,3 +8,5 @@ numpy>=2.0
 pyyaml>=6.0
 websockets>=13.0
 pydantic>=2.9
+# macOS でカメラを UUID で安定識別するため。他 OS では存在しないので platform marker
+pyobjc-framework-AVFoundation>=11.0; sys_platform == "darwin"
