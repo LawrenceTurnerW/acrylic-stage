@@ -1,17 +1,25 @@
 """ゲーム状態管理。
 
-Day 1-2 では YAML を読み込んで保持するだけ。
-後で battle engine から書き換えられるよう、シンプルな in-memory dict にしておく。
+YAML を読み込み、起動時に各キャラのコンディションを 1 回だけ抽選する。
+コンディションは SPEC §4.4 の確率に従う(絶好調 10% / 好調 25% / 普通 30% /
+緊張気味 25% / 寝不足 10%)。再抽選はプロセス再起動で発生。
+
+実行時に書き換わる状態は phase と formation のみ。戦闘ロジックは engine/
+側に置き、ここはセッション全体を通じてのスナップショットを保持する役。
 """
 
 from __future__ import annotations
 
+import logging
+import random
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
+
+logger = logging.getLogger(__name__)
 
 
 def _load_yaml(name: str) -> dict[str, Any]:
@@ -25,15 +33,38 @@ class GameState:
         self.stages_cfg = _load_yaml("stages.yaml")
         self.dialogue_cfg = _load_yaml("dialogue.yaml")
 
-        # ランタイム状態(Day 1-2 では placeholder)
+        # ランタイム状態
         self.phase: str = "idle"  # idle / prepare / battle / result
-        self.detections: list[dict[str, Any]] = []  # 最新の ArUco 検出結果
+        self.formation: dict[str, list[int]] = {"front": [], "rear": []}
+
+        # コンディションは起動時に 1 度だけ抽選
+        self._character_conditions: dict[str, dict[str, Any]] = {}
+        self._roll_conditions()
+
+    def _roll_conditions(self) -> None:
+        conditions = self.characters_cfg.get("conditions", [])
+        if not conditions:
+            return
+        weights = [float(c.get("probability", 0)) for c in conditions]
+        for ch in self.characters_cfg.get("characters", []):
+            chosen = random.choices(conditions, weights=weights, k=1)[0]
+            self._character_conditions[ch["id"]] = chosen
+            logger.info(
+                "condition rolled: %s -> %s", ch["id"], chosen.get("id")
+            )
+
+    def characters_with_conditions(self) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for ch in self.characters_cfg.get("characters", []):
+            out.append(
+                {**ch, "condition": self._character_conditions.get(ch["id"])}
+            )
+        return out
 
     def snapshot(self) -> dict[str, Any]:
-        """/state で返す現在状態。"""
         return {
             "phase": self.phase,
-            "detections": self.detections,
+            "formation": self.formation,
             "character_count": len(self.characters_cfg.get("characters", [])),
             "stage_count": len(self.stages_cfg.get("stages", [])),
         }

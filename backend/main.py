@@ -95,11 +95,48 @@ async def state() -> dict[str, Any]:
     return game_state.snapshot()
 
 
+@app.get("/characters")
+async def characters_endpoint() -> dict[str, Any]:
+    """7 キャラの全情報 + ユニット/属性メタデータ + 起動時抽選済みコンディションを返す。
+
+    レスポンスは Electron 側の編成画面・戦闘画面で参照する。
+    再フェッチしてもコンディションは変わらない(プロセス再起動で再抽選)。
+    """
+    cfg = game_state.characters_cfg
+    return {
+        "characters": game_state.characters_with_conditions(),
+        "units": cfg.get("units", {}),
+        "attributes": cfg.get("attributes", {}),
+        "stat_to_stars": cfg.get("stat_to_stars", {}),
+        "position_modifiers": cfg.get("position_modifiers", {}),
+        "base_params": cfg.get("base_params", {}),
+        "conditions": cfg.get("conditions", []),
+    }
+
+
+@app.get("/stage")
+async def stage_endpoint() -> dict[str, Any]:
+    """現在進行予定のステージを返す(ハッカソン版ではステージ1固定)。"""
+    stages = game_state.stages_cfg.get("stages", [])
+    return {
+        "current": stages[0] if stages else None,
+        "enemy_types": game_state.stages_cfg.get("enemy_types", {}),
+        "warning_attack_defaults": game_state.stages_cfg.get(
+            "warning_attack_defaults", {}
+        ),
+    }
+
+
 @app.post("/start_battle")
 async def start_battle(req: StartBattleRequest) -> dict[str, Any]:
-    """Day 1-2 では受信して phase を切り替えるだけのスタブ。"""
+    """編成を確定して battle phase に遷移。
+
+    Day 3 では受信内容を formation に記録し、battle_start を broadcast するのみ。
+    Day 4 以降で実際の戦闘ロジック(engine/battle.py)を起動する。
+    """
     logger.info("start_battle: front=%s rear=%s", req.front, req.rear)
     game_state.phase = "battle"
+    game_state.formation = {"front": req.front, "rear": req.rear}
     await ws_manager.broadcast(
         {
             "type": "battle_start",
@@ -107,6 +144,14 @@ async def start_battle(req: StartBattleRequest) -> dict[str, Any]:
             "rear": req.rear,
         }
     )
+    return {"ok": True, "phase": game_state.phase}
+
+
+@app.post("/reset")
+async def reset_to_prepare() -> dict[str, Any]:
+    """戦闘を抜けて編成画面に戻る用のスタブ。"""
+    game_state.phase = "prepare"
+    game_state.formation = {"front": [], "rear": []}
     return {"ok": True, "phase": game_state.phase}
 
 
