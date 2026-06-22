@@ -3,6 +3,7 @@ import { TitleScreen } from "./components/TitleScreen";
 import { BattleScreen } from "./components/BattleScreen";
 import { CalibrationScreen } from "./components/CalibrationScreen";
 import { PrepareScreen } from "./components/PrepareScreen";
+import { StageIntroOverlay } from "./components/StageIntroOverlay";
 import { useGameData } from "./hooks/useGameData";
 import { connectLiveWS, type ServerEvent, type WSStatus } from "./ws";
 
@@ -23,6 +24,9 @@ export default function App() {
   const [formation, setFormation] = useState<Formation>({ front: [], rear: [] });
   const [log, setLog] = useState<string[]>([]);
   const logRef = useRef<string[]>([]);
+  // ステージ告知オーバーレイは初回 prepare 入場時に 1 度だけ出す
+  const [stageIntroShown, setStageIntroShown] = useState(false);
+  const [showingStageIntro, setShowingStageIntro] = useState(false);
 
   const gameData = useGameData();
 
@@ -59,6 +63,14 @@ export default function App() {
     });
     return close;
   }, []);
+
+  const goToPrepare = () => {
+    setScreen("prepare");
+    if (!stageIntroShown && gameData.stage?.current) {
+      setShowingStageIntro(true);
+      setStageIntroShown(true);
+    }
+  };
 
   const handleReady = async (f: Formation) => {
     setFormation(f);
@@ -115,10 +127,7 @@ export default function App() {
           >
             キャリブレーション
           </NavBtn>
-          <NavBtn
-            active={screen === "prepare"}
-            onClick={() => setScreen("prepare")}
-          >
+          <NavBtn active={screen === "prepare"} onClick={goToPrepare}>
             編成
           </NavBtn>
           <NavBtn
@@ -137,9 +146,7 @@ export default function App() {
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {header}
       <main style={{ flex: 1, padding: 20 }}>
-        {screen === "title" && (
-          <TitleScreen onStart={() => setScreen("prepare")} />
-        )}
+        {screen === "title" && <TitleScreen onStart={goToPrepare} />}
         {screen === "calibration" && <CalibrationScreen frame={latestFrame} />}
         {screen === "prepare" &&
           (gameData.characters ? (
@@ -162,6 +169,12 @@ export default function App() {
           />
         )}
       </main>
+      {showingStageIntro && gameData.stage?.current && (
+        <StageIntroOverlay
+          stage={gameData.stage.current}
+          onDone={() => setShowingStageIntro(false)}
+        />
+      )}
     </div>
   );
 }

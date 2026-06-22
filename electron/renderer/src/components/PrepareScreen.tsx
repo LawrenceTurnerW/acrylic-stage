@@ -249,8 +249,10 @@ function FormationRow(props: {
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         {filled.map((d, i) => (
+          // 新しいキャラがスロットに入った瞬間に slot-fill アニメが走るよう、
+          // 空のときと埋まったときで key を変える(React に別ノードと認識させる)
           <FormationSlot
-            key={i}
+            key={d ? `c-${d.marker_id}` : `empty-${props.title}-${i}`}
             detection={d}
             character={d ? props.charsById.get(d.marker_id) : null}
           />
@@ -268,6 +270,7 @@ function FormationSlot(props: {
   if (!c || !detection) {
     return (
       <div
+        className="empty-pulse"
         style={{
           flex: 1,
           height: 88,
@@ -277,7 +280,6 @@ function FormationSlot(props: {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          opacity: 0.45,
           fontSize: 11,
         }}
       >
@@ -288,12 +290,14 @@ function FormationSlot(props: {
   const accent = c.personal_color;
   return (
     <div
+      className="slot-fill"
       style={{
         flex: 1,
         height: 88,
         borderRadius: 8,
         background: `linear-gradient(135deg, ${accent}44, ${accent}11)`,
         border: `1.5px solid ${accent}`,
+        color: accent, // slot-fill アニメで currentColor の glow になる
         display: "flex",
         alignItems: "center",
         gap: 10,

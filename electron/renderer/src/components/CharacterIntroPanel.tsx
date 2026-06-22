@@ -28,6 +28,7 @@ export function CharacterIntroPanel(props: {
 
   return (
     <div
+      className="fade-in"
       style={{
         borderRadius: 12,
         padding: variant === "compact" ? 10 : 14,
