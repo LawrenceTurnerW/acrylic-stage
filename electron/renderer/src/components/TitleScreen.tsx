@@ -39,8 +39,11 @@ export function TitleScreen(props: { onStart: () => void }) {
           letterSpacing: 2,
         }}
       >
-        テスト開始
+        ライブ開始
       </button>
+      <p style={{ opacity: 0.5, margin: 0, fontSize: 11 }}>
+        編成画面でアクスタを並べてください
+      </p>
     </div>
   );
 }

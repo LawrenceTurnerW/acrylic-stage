@@ -2,9 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { TitleScreen } from "./components/TitleScreen";
 import { BattleScreen } from "./components/BattleScreen";
 import { CalibrationScreen } from "./components/CalibrationScreen";
+import { PrepareScreen } from "./components/PrepareScreen";
+import { useGameData } from "./hooks/useGameData";
 import { connectLiveWS, type ServerEvent, type WSStatus } from "./ws";
 
-type Screen = "title" | "calibration" | "battle";
+type Screen = "title" | "calibration" | "prepare" | "battle";
+
+const API_BASE = "http://127.0.0.1:8000";
+
+export type Formation = { front: number[]; rear: number[] };
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("title");
@@ -14,8 +20,11 @@ export default function App() {
     ServerEvent,
     { type: "aruco_frame" }
   > | null>(null);
+  const [formation, setFormation] = useState<Formation>({ front: [], rear: [] });
   const [log, setLog] = useState<string[]>([]);
   const logRef = useRef<string[]>([]);
+
+  const gameData = useGameData();
 
   const appendLog = (line: string) => {
     logRef.current = [
@@ -51,6 +60,20 @@ export default function App() {
     return close;
   }, []);
 
+  const handleReady = async (f: Formation) => {
+    setFormation(f);
+    try {
+      await fetch(`${API_BASE}/start_battle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(f),
+      });
+    } catch (e) {
+      appendLog(`start_battle failed: ${e}`);
+    }
+    setScreen("battle");
+  };
+
   const header = useMemo(
     () => (
       <header
@@ -64,7 +87,7 @@ export default function App() {
         }}
       >
         <strong style={{ letterSpacing: 1 }}>Acrylic Stage</strong>
-        <span style={{ opacity: 0.6, fontSize: 12 }}>v0.1.0 (skeleton)</span>
+        <span style={{ opacity: 0.6, fontSize: 12 }}>v0.2.0 (day-3)</span>
         <span
           style={{
             marginLeft: "auto",
@@ -82,7 +105,7 @@ export default function App() {
             ? ` (seq=${lastHeartbeat.seq})`
             : ""}
         </span>
-        <nav style={{ display: "flex", gap: 8 }}>
+        <nav style={{ display: "flex", gap: 6 }}>
           <NavBtn active={screen === "title"} onClick={() => setScreen("title")}>
             タイトル
           </NavBtn>
@@ -93,10 +116,16 @@ export default function App() {
             キャリブレーション
           </NavBtn>
           <NavBtn
+            active={screen === "prepare"}
+            onClick={() => setScreen("prepare")}
+          >
+            編成
+          </NavBtn>
+          <NavBtn
             active={screen === "battle"}
             onClick={() => setScreen("battle")}
           >
-            戦闘(空)
+            戦闘
           </NavBtn>
         </nav>
       </header>
@@ -107,13 +136,30 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {header}
-      <main style={{ flex: 1, padding: 24 }}>
+      <main style={{ flex: 1, padding: 20 }}>
         {screen === "title" && (
-          <TitleScreen onStart={() => setScreen("battle")} />
+          <TitleScreen onStart={() => setScreen("prepare")} />
         )}
         {screen === "calibration" && <CalibrationScreen frame={latestFrame} />}
+        {screen === "prepare" &&
+          (gameData.characters ? (
+            <PrepareScreen
+              frame={latestFrame}
+              charsData={gameData.characters}
+              stage={gameData.stage}
+              onReady={handleReady}
+            />
+          ) : (
+            <LoadingPanel error={gameData.error} />
+          ))}
         {screen === "battle" && (
-          <BattleScreen heartbeat={lastHeartbeat} log={log} />
+          <BattleScreen
+            heartbeat={lastHeartbeat}
+            log={log}
+            formation={formation}
+            charsData={gameData.characters}
+            onReturnToPrepare={() => setScreen("prepare")}
+          />
         )}
       </main>
     </div>
@@ -140,5 +186,27 @@ function NavBtn(props: {
     >
       {props.children}
     </button>
+  );
+}
+
+function LoadingPanel(props: { error: string | null }) {
+  return (
+    <div
+      style={{
+        padding: 40,
+        textAlign: "center",
+        opacity: 0.7,
+        fontSize: 14,
+      }}
+    >
+      {props.error ? (
+        <>
+          <div style={{ color: "#ff7b72" }}>データ取得失敗</div>
+          <div style={{ fontSize: 12, marginTop: 8 }}>{props.error}</div>
+        </>
+      ) : (
+        "キャラデータ取得中…"
+      )}
+    </div>
   );
 }
