@@ -1,0 +1,75 @@
+# =============================================================================
+# Acrylic Stage - .gitignore
+# =============================================================================
+
+# ─── キャラクター画像・公式素材(リポジトリには含めない)───
+backend/assets/characters/
+backend/assets/official/
+assets/characters/
+assets/official/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.psd
+*.ai
+
+# 例外: ArUcoマーカー印刷用PNG等は許可したい場合
+!docs/aruco_markers/*.png
+!docs/screenshots/*.png
+
+# ─── BGM・効果音 ───
+backend/assets/audio/
+*.mp3
+*.wav
+*.ogg
+*.m4a
+
+# ─── 環境変数・秘密情報 ───
+.env
+.env.local
+.env.*.local
+*.secret
+
+# ─── Python ───
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ─── Node / Electron ───
+node_modules/
+dist/
+out/
+build/
+.electron/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+
+# ─── IDE / エディタ ───
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── ローカル設定ファイル ───
+config.local.yaml
+*.local.yaml
+calibration.local.json

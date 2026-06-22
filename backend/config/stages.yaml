@@ -1,0 +1,123 @@
+# =============================================================================
+# Acrylic Stage - ステージ定義
+# =============================================================================
+# 各ステージの設定、敵編成、特殊ギミックを定義。
+# このファイルに新ステージを追加することで、コード変更なしにステージ拡張が可能。
+# =============================================================================
+
+# 警告攻撃のシステムデフォルト値(ステージ側で上書き可能)
+warning_attack_defaults:
+  probability_per_turn: 0.25      # ボスターン毎の発動確率
+  warning_turns: 2                # 警告から発動までのターン数
+  damage_base: 50                 # 該当列全員へのダメージ
+  duplicate_prevention: true      # 警告中は連続抽選しない
+
+# ステージ一覧
+stages:
+  - id: stage_1_sunlight
+    name: "真夏のサンライトステージ"
+    description: "野外フェスデビュー。明るく開放的なライブ"
+    recommended_attributes: [light, sound]
+    expected_turn_count: "6〜8"
+    reward_message: "初ライブ達成"
+    
+    # ステージBGMやテーマカラーなど演出用
+    theme:
+      background: "sunny_outdoor"
+      bgm: null  # SE/BGMは未決(SPEC §15参照)
+      accent_color: "#FFB84D"
+    
+    # 敵編成
+    enemies:
+      - id: summer_slime_a
+        type: summer_slime
+        position: front_left
+      - id: summer_slime_b
+        type: summer_slime
+        position: front_center
+      - id: summer_slime_c
+        type: summer_slime
+        position: front_right
+      - id: heat_golem
+        type: heat_golem
+        position: back_center
+        is_boss: true
+    
+    # 勝利条件
+    victory_condition: all_enemies_defeated
+    
+    # 敗北条件
+    defeat_condition: all_allies_downed
+
+# 敵の種類定義
+enemy_types:
+  summer_slime:
+    name: "サマースライム"
+    icon: "🟢"
+    hp: 30
+    attack: 8
+    speed: 8
+    behavior:
+      # 単体に弱攻撃。前列を集中して狙う傾向
+      target_strategy: prefer_front  # 前列優先(75%)
+      attack_pattern:
+        - kind: damage_single
+          weight: 1.0  # 通常攻撃のみ
+  
+  heat_golem:
+    name: "ヒートゴーレム"
+    icon: "🟠"
+    hp: 120
+    attack: 15
+    speed: 6
+    behavior:
+      target_strategy: prefer_front  # 単体狙う際は前列優先
+      attack_pattern:
+        - kind: damage_single
+          weight: 0.75  # 通常攻撃 75%
+        - kind: warning_attack
+          weight: 0.25  # 警告攻撃 25%
+      
+      # 警告攻撃の詳細(ボス固有)
+      warning_attack:
+        probability_per_turn: 0.25  # 25%で発動
+        warning_turns: 2            # 2ターン後に発動
+        damage_base: 50             # 該当列に50固定ダメージ
+        variants:
+          - kind: front_blast
+            name: "前列爆撃"
+            target_row: front
+            weight: 0.5
+          - kind: rear_snipe
+            name: "後列狙撃"
+            target_row: rear
+            weight: 0.5
+        announcement:
+          turn_minus_2: "⚠ 2ターン後:{variant_name}!"
+          turn_minus_1: "⚠ 残り1ターン!{variant_name}が来る!"
+          on_fire:
+            hit: "💥 {variant_name}!"
+            safe: "ヒュー...セーフ!"
+
+# ターゲット選択戦略
+target_strategies:
+  prefer_front:
+    front_chance: 0.75
+    rear_chance: 0.25
+  prefer_rear:
+    front_chance: 0.25
+    rear_chance: 0.75
+  random:
+    front_chance: 0.5
+    rear_chance: 0.5
+
+# 将来追加予定のステージ案(コメントアウトで参考のみ)
+# stages_future:
+#   - id: stage_2_midnight
+#     name: "深夜の生配信スタジオ"
+#     recommended_attributes: [dark, fire]
+#     enemies: [nocturne_bat, anti_comment_specter, sleepiness_phantom]
+#   - id: stage_3_arena
+#     name: "武道館・最終ステージ"
+#     recommended_attributes: [balance]
+#     enemies: [stagelight_phantom, media_pressure, silent_wall]

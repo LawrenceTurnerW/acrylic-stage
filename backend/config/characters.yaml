@@ -1,0 +1,312 @@
+# =============================================================================
+# Acrylic Stage - キャラクター定義
+# =============================================================================
+# 7体のキャラステータス、属性、ロール、必殺技、ArUcoマーカー、個人カラー を定義。
+# このファイルを編集することで、コード変更なしにバランス調整が可能。
+# =============================================================================
+
+# 内部ステータス値の星対応(参照用)
+stat_to_stars:
+  attack:
+    1: 10
+    2: 13
+    3: 16
+    4: 19
+    5: 22
+  defense:
+    1: 8
+    2: 10
+    3: 12
+    4: 14
+    5: 16
+  speed:
+    1: 10
+    2: 12
+    3: 14
+    4: 17
+    5: 20
+
+# ユニット定義
+units:
+  RouteHeart:
+    display_name: "RouteHeart"
+    display_name_jp: "ルートハート"
+    genre: "王道アイドル"
+    icon: "💘"
+    role_tendency: "支援(回復・バフ)"
+  REGALILIA:
+    display_name: "REGALILIA"
+    display_name_jp: "レガリリア"
+    genre: "ヘヴィメタル"
+    icon: "👑"
+    role_tendency: "火力(高ダメージアタッカー)"
+  Sputrip:
+    display_name: "Sputrip"
+    display_name_jp: "スプートリップ"
+    genre: "シティポップ"
+    icon: "💫"
+    role_tendency: "技巧(状態異常・速度操作)"
+
+# 属性定義
+attributes:
+  light:
+    display: "光"
+    icon: "✨"
+    color: "#FFD700"  # 演出用属性カラー(技エフェクト等)
+  sound:
+    display: "音"
+    icon: "🎵"
+    color: "#FF69B4"
+  fire:
+    display: "炎"
+    icon: "🔥"
+    color: "#FF4500"
+  dark:
+    display: "闇"
+    icon: "🌙"
+    color: "#6B2D8C"
+  ice:
+    display: "氷"
+    icon: "❄️"
+    color: "#00CED1"
+  wind:
+    display: "風"
+    icon: "🌪"
+    color: "#90EE90"
+  water:
+    display: "水"
+    icon: "💧"
+    color: "#1E90FF"
+
+# キャラクター定義(7体)
+characters:
+  - id: nanami_rona
+    name: "七海ロナ"
+    aruco_marker_id: 0
+    unit: RouteHeart
+    attribute: light
+    personal_color: "#3D7FD9"      # 個人カラー: 青
+    role: "ヒーラー"
+    role_description: "全体回復で味方を支える"
+    stats:
+      attack: 2      # ★★
+      defense: 3     # ★★★
+      speed: 2       # ★★
+    position_preference: rear      # 適性: 後列
+    ultimate:
+      name: "ハートビート・オーロラ"
+      type: "全体回復"
+      description: "全味方のテンション +30 回復、声援ゲージ +10"
+      effects:
+        - kind: heal_all
+          amount: 30
+        - kind: gauge_all
+          amount: 10
+    voice_style: "王道アイドル、明るく前向き"
+
+  - id: fujimiya_kotoha
+    name: "藤宮コトハ"
+    aruco_marker_id: 1
+    unit: RouteHeart
+    attribute: sound
+    personal_color: "#F4A6C9"      # 個人カラー: ピンク
+    role: "サポーター"
+    role_description: "全体バフで攻撃力を底上げ"
+    stats:
+      attack: 3      # ★★★
+      defense: 3     # ★★★
+      speed: 4       # ★★★★
+    position_preference: either    # どちらでも
+    ultimate:
+      name: "セレナーデ・コール"
+      type: "全体バフ"
+      description: "全味方の攻撃力を2ターンの間 ×1.5"
+      effects:
+        - kind: buff_attack_all
+          multiplier: 1.5
+          turns: 2
+    voice_style: "王道アイドル、優しく可愛らしい"
+
+  - id: enami_kyouka
+    name: "江波キョウカ"
+    aruco_marker_id: 2
+    unit: REGALILIA
+    attribute: fire
+    personal_color: "#E53935"      # 個人カラー: 赤
+    role: "アタッカー"
+    role_description: "単体超火力で敵を焼き尽くす"
+    stats:
+      attack: 5      # ★★★★★
+      defense: 4     # ★★★★
+      speed: 2       # ★★
+    position_preference: front     # 適性: 前列
+    ultimate:
+      name: "ブレイズ・アンセム"
+      type: "単体超火力"
+      description: "単体に大ダメージ(攻撃×3.0) + 2ターン延焼(毎T 10ダメ)"
+      effects:
+        - kind: damage_single
+          multiplier: 3.0
+        - kind: dot
+          name: "延焼"
+          damage: 10
+          turns: 2
+    voice_style: "メタル系、熱血で激しめ"
+
+  - id: kitami_ayumu
+    name: "鬼多見アユム"
+    aruco_marker_id: 3
+    unit: REGALILIA
+    attribute: dark
+    personal_color: "#7B3F9E"      # 個人カラー: 紫
+    role: "トリックスター"
+    role_description: "全敵を確定クリで撹乱、ハイリスク前列"
+    stats:
+      attack: 4      # ★★★★
+      defense: 1     # ★
+      speed: 5       # ★★★★★
+    position_preference: front_risk  # 前列(ハイリスク)
+    ultimate:
+      name: "ナイトトリック・ステップ"
+      type: "全体攻撃"
+      description: "全敵に攻撃(攻撃×1.8)、確定クリティカル"
+      effects:
+        - kind: damage_all
+          multiplier: 1.8
+          guaranteed_critical: true
+    voice_style: "メタル系、クールで挑発的"
+
+  - id: akatsuki_clara
+    name: "暁月クララ"
+    aruco_marker_id: 4
+    unit: Sputrip
+    attribute: ice
+    personal_color: "#F39C12"      # 個人カラー: オレンジ
+    role: "フィールドコントローラー"
+    role_description: "全体攻撃+敵速度ダウンで戦場を制圧"
+    stats:
+      attack: 4      # ★★★★
+      defense: 3     # ★★★
+      speed: 2       # ★★
+    position_preference: rear      # 適性: 後列
+    ultimate:
+      name: "フローズン・ステージ"
+      type: "全体攻撃+デバフ"
+      description: "全敵に攻撃(攻撃×1.5)、敵の素早さを2ターン -30%"
+      effects:
+        - kind: damage_all
+          multiplier: 1.5
+        - kind: debuff_speed_all
+          multiplier: 0.7
+          turns: 2
+    voice_style: "シティポップ系、洗練されてアンニュイ"
+
+  - id: tokiwa_kaname
+    name: "常磐カナメ"
+    aruco_marker_id: 5
+    unit: Sputrip
+    attribute: wind
+    personal_color: "#52B788"      # 個人カラー: 緑
+    role: "スピードアタッカー"
+    role_description: "圧倒的素早さから3連撃を叩き込む"
+    stats:
+      attack: 3      # ★★★
+      defense: 2     # ★★
+      speed: 5       # ★★★★★
+    position_preference: either    # どちらでも
+    ultimate:
+      name: "ブリーズ・タップステップ"
+      type: "単体3連撃"
+      description: "単体に3連撃(攻撃×0.8×3)、最終撃クリ率UP"
+      effects:
+        - kind: damage_single_multi
+          hits: 3
+          multiplier_per_hit: 0.8
+          critical_boost_on_last: 0.5
+    voice_style: "シティポップ系、しなやかでミステリアス"
+
+  - id: kanaru_hanon
+    name: "香鳴ハノン"
+    aruco_marker_id: 6
+    unit: Sputrip
+    attribute: water
+    personal_color: "#7EC8E3"      # 個人カラー: 水色
+    role: "デバッファー"
+    role_description: "毒で敵をじわじわ削る"
+    stats:
+      attack: 3      # ★★★
+      defense: 3     # ★★★
+      speed: 3       # ★★★
+    position_preference: rear      # 適性: 後列
+    ultimate:
+      name: "アクア・ミラージュ"
+      type: "単体+毒"
+      description: "単体大ダメージ(攻撃×1.5) + 3ターン毒(毎T 12ダメ)"
+      effects:
+        - kind: damage_single
+          multiplier: 1.5
+        - kind: dot
+          name: "毒"
+          damage: 12
+          turns: 3
+    voice_style: "シティポップ系、ムーディーで艶っぽい"
+
+# コンディション定義
+conditions:
+  - id: peak
+    display: "絶好調"
+    icon: "✨"
+    probability: 0.10
+    attack_multiplier: 1.30
+    gauge_multiplier: 1.50
+    skip_chance: 0.0
+  - id: good
+    display: "好調"
+    icon: ""
+    probability: 0.25
+    attack_multiplier: 1.10
+    gauge_multiplier: 1.0
+    skip_chance: 0.0
+  - id: normal
+    display: "普通"
+    icon: ""
+    probability: 0.30
+    attack_multiplier: 1.0
+    gauge_multiplier: 1.0
+    skip_chance: 0.0
+  - id: nervous
+    display: "緊張気味"
+    icon: ""
+    probability: 0.25
+    attack_multiplier: 0.90
+    gauge_multiplier: 1.0
+    skip_chance: 0.0
+  - id: sleepy
+    display: "寝不足"
+    icon: "😪"
+    probability: 0.10
+    attack_multiplier: 0.85
+    gauge_multiplier: 1.0
+    skip_chance: 0.10
+
+# 基本パラメータ
+base_params:
+  starting_tension: 100        # テンション(HP)初期値
+  starting_gauge: 0            # 声援ゲージ初期値
+  max_gauge: 100               # 必殺発動値
+  turn_interval_sec: 5         # ターン間隔(秒)
+  gauge_per_normal_attack: 20  # 通常攻撃時のゲージ獲得
+  gauge_per_hit_taken: 10      # 被弾時のゲージ獲得
+  gauge_per_turn: 5            # ターン経過時のゲージ獲得
+  damage_minimum: 1            # 最低保証ダメージ
+
+# 配置補正
+position_modifiers:
+  front:
+    damage_taken_multiplier: 1.5
+    matching_attack_bonus: 1.20      # 適性位置のとき
+    mismatching_attack_penalty: 0.85 # 不適性のとき
+  rear:
+    damage_taken_multiplier: 0.5
+    matching_attack_bonus: 1.20
+    mismatching_attack_penalty: 0.85
