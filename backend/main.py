@@ -10,9 +10,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import Any
+
+# macOS: OpenCV のカメラ認可リクエストはメインスレッドからしか走らせられないので、
+# ここで明示的にスキップし、認可はターミナルアプリ(プロセス親)のものに委ねる。
+# 初回起動時に macOS のカメラ許可ダイアログが出るので、ターミナル(または Claude
+# が起動した親アプリ)に対して許可すること。
+os.environ.setdefault("OPENCV_AVFOUNDATION_SKIP_AUTH", "1")
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware

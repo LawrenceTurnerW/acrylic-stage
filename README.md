@@ -71,16 +71,26 @@
 
 ---
 
-## 🧪 セットアップ手順(参考)
+## 🧪 セットアップ手順
+
+### 前提
+- Python 3.11+(3.14 でも動作確認済み。OpenCV のホイールが Python 3.14 で揃っていることを確認)
+- Node.js 18+
+- カメラアクセス(macOS の場合、ターミナルアプリにカメラ権限を許可)
 
 ### バックエンド
 ```bash
 cd backend
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install fastapi uvicorn opencv-contrib-python pyyaml websockets
-python main.py
+pip install -r requirements.txt
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
+
+起動後、確認用エンドポイント:
+- `http://127.0.0.1:8000/health` → `{"ok": true}`
+- `http://127.0.0.1:8000/state` → 現在の game state
+- `ws://127.0.0.1:8000/ws/live` → heartbeat (2 秒間隔) + aruco_frame (5fps)
 
 ### フロントエンド
 ```bash
@@ -88,6 +98,12 @@ cd electron
 npm install
 npm run dev
 ```
+
+`npm run dev` で Vite (renderer の HMR) と Electron が並行起動する。タイトル画面 → 「キャリブレーション」タブでカメラ映像と前列ラインを確認。
+
+### macOS のカメラ権限について
+初回起動時にカメラ権限ダイアログが出る。ターミナル(または Claude Code を起動した親アプリ)に対して「カメラ」を許可すること。
+OpenCV のスレッド制約を避けるため `OPENCV_AVFOUNDATION_SKIP_AUTH=1` を `main.py` で設定済み。
 
 ---
 
