@@ -1,0 +1,10 @@
+# Python 3.11+ で動作確認。3.14 では opencv-contrib-python のホイールが
+# 出ていない可能性があるため、その時は Python 3.12/3.13 を別途用意するか
+# pip install --pre で確認すること。
+fastapi>=0.115
+uvicorn[standard]>=0.32
+opencv-contrib-python>=4.10
+numpy>=2.0
+pyyaml>=6.0
+websockets>=13.0
+pydantic>=2.9
