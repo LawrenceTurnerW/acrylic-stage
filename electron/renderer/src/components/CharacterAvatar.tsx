@@ -28,24 +28,40 @@ export function CharacterAvatar(props: {
   const showImage = !!url && !errored;
 
   if (showImage) {
+    // 公式 cast 画像は縦長の全身ショットなので、wrapper で overflow:hidden しつつ
+    // img を scale(1.7) で拡大して顔だけが大きく見えるようにクロップする。
+    // origin: center top で「上端を固定したまま下方向に拡大」=「画像の下半分が
+    // 視界外に押し出されて頭部だけ残る」効果。scale 値はキャラ毎に微調整したく
+    // なったら CSS 変数化を検討する。
     return (
-      <img
-        src={`${API_BASE}${url}`}
-        alt={c.id}
-        onError={() => setErrored(true)}
+      <div
         style={{
           width: size,
           height: size,
           borderRadius: radius,
-          objectFit: "cover",
-          objectPosition: "center top",
+          overflow: "hidden",
           background: accent,
-          flexShrink: 0,
           border: `2px solid ${accent}`,
           boxShadow: glow ? `0 0 12px ${accent}66` : "none",
+          flexShrink: 0,
         }}
         title={`ArUco marker id ${c.aruco_marker_id}`}
-      />
+      >
+        <img
+          src={`${API_BASE}${url}`}
+          alt={c.id}
+          onError={() => setErrored(true)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: "center top",
+            transform: "scale(1.7)",
+            transformOrigin: "center top",
+            display: "block",
+          }}
+        />
+      </div>
     );
   }
 
