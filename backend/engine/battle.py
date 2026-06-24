@@ -21,6 +21,7 @@ from .combatant import Combatant, build_ally, build_enemy
 from .damage import calculate_damage
 from .dialogue import pick_dialogue, pick_system_message
 from .effects import execute_ultimate
+from .items import apply_to_combatant, resolve as resolve_item
 from .targeting import (
     DEFAULT_TARGET_STRATEGIES,
     pick_target_for_ally,
@@ -58,11 +59,19 @@ class BattleEngine:
 
     # -------- 公開 API --------
 
-    async def start(self, formation: dict[str, list[int]]) -> dict[str, Any]:
-        """編成を確定して戦闘を開始する。"""
+    async def start(
+        self,
+        formation: dict[str, list[int]],
+        equipment: dict[str, dict[str, str]] | None = None,
+    ) -> dict[str, Any]:
+        """編成を確定して戦闘を開始する。
+
+        equipment: {character_id: {"kind": "...", "rarity": "..."}} のマップ。
+        指定されたキャラには対応するアイテム効果が build_ally 時に加算される。
+        """
         async with self._lock:
             await self._stop_unlocked()
-            self._build_combatants(formation)
+            self._build_combatants(formation, equipment or {})
             self.turn = 0
             self.finished = False
             self.result = None
@@ -148,10 +157,15 @@ class BattleEngine:
 
     # -------- 内部: セットアップ --------
 
-    def _build_combatants(self, formation: dict[str, list[int]]) -> None:
+    def _build_combatants(
+        self,
+        formation: dict[str, list[int]],
+        equipment: dict[str, dict[str, str]],
+    ) -> None:
         gs = self.game_state
         chars_cfg = gs.characters_cfg
         stages_cfg = gs.stages_cfg
+        items_cfg = gs.items_cfg
 
         characters_with_cond = gs.characters_with_conditions()
         chars_by_marker = {
@@ -168,9 +182,32 @@ class BattleEngine:
                 if not ch:
                     logger.warning("unknown marker_id in formation: %s", marker_id)
                     continue
-                allies.append(
-                    build_ally(ch, base_params, stat_to_stars, row=row_name)
-                )
+                ally = build_ally(ch, base_params, stat_to_stars, row=row_name)
+                # 装備があれば効果を加算(対応する character_id が equipment に
+                # 含まれている時のみ)
+                eq = equipment.get(ally.id)
+                if eq:
+                    resolved = resolve_item(
+                        items_cfg, eq.get("kind", ""), eq.get("rarity", "")
+                    )
+                    if resolved:
+                        apply_to_combatant(ally, resolved)
+                        ally.equipment = {
+                            "kind": resolved.kind,
+                            "rarity": resolved.rarity,
+                            "name": resolved.name,
+                            "icon": resolved.icon,
+                            "effect": resolved.effect,
+                            "value": resolved.value,
+                        }
+                        logger.info(
+                            "equipped %s on %s: %s +%d",
+                            resolved.name,
+                            ally.name,
+                            resolved.effect,
+                            resolved.value,
+                        )
+                allies.append(ally)
         self.allies = allies
 
         # 現在ステージ(ハッカソン版は stage[0] 固定)
@@ -241,13 +278,15 @@ class BattleEngine:
             return
 
         # 2) ターン経過 gauge
+        # コンディション補正は base 分にのみ適用、装備の bonus はフラットに加算
         gauge_per_turn = int(base_params.get("gauge_per_turn", 5))
         for ally in self.allies:
             if not ally.downed:
                 mult = 1.0
                 if ally.condition:
                     mult = float(ally.condition.get("gauge_multiplier", 1.0))
-                ally.gain_gauge(int(round(gauge_per_turn * mult)))
+                base_gain = int(round(gauge_per_turn * mult))
+                ally.gain_gauge(base_gain + ally.bonus_gauge_per_turn)
 
         # 3) 行動順を素早さ降順で確定(同率はランダム並び替え)
         actors = self._build_action_order()

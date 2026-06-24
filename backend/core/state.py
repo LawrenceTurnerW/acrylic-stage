@@ -32,6 +32,7 @@ class GameState:
         self.characters_cfg = _load_yaml("characters.yaml")
         self.stages_cfg = _load_yaml("stages.yaml")
         self.dialogue_cfg = _load_yaml("dialogue.yaml")
+        self.items_cfg = _load_yaml("items.yaml")
 
         # ランタイム状態
         self.phase: str = "idle"  # idle / prepare / battle / result

@@ -87,9 +87,16 @@ app.add_middleware(
 )
 
 
+class EquippedItem(BaseModel):
+    kind: str
+    rarity: str
+
+
 class StartBattleRequest(BaseModel):
     front: list[int] = []  # marker_id の配列
     rear: list[int] = []
+    # character_id → 装備中アイテム。frontend の localStorage が真実。
+    equipment: dict[str, EquippedItem] = {}
 
 
 @app.get("/health")
@@ -134,16 +141,37 @@ async def stage_endpoint() -> dict[str, Any]:
     }
 
 
+@app.get("/items")
+async def items_endpoint() -> dict[str, Any]:
+    """ドロップアクセサリーのカタログ(種類・レアリティ・効果値)を返す。
+
+    frontend はこれをロードして「装備中アイテムの効果値表示」「ドロップ時の
+    レアリティ抽選」「装備時の効果プレビュー」に利用する。
+    """
+    return game_state.items_cfg or {}
+
+
 @app.post("/start_battle")
 async def start_battle(req: StartBattleRequest) -> dict[str, Any]:
     """編成を確定して BattleEngine を起動する。"""
-    logger.info("start_battle: front=%s rear=%s", req.front, req.rear)
+    equipment_dict = {
+        cid: {"kind": item.kind, "rarity": item.rarity}
+        for cid, item in req.equipment.items()
+    }
+    logger.info(
+        "start_battle: front=%s rear=%s equipment_count=%d",
+        req.front,
+        req.rear,
+        len(equipment_dict),
+    )
     game_state.phase = "battle"
     game_state.formation = {"front": req.front, "rear": req.rear}
     await ws_manager.broadcast(
         {"type": "battle_start", "front": req.front, "rear": req.rear}
     )
-    result = await battle_engine.start({"front": req.front, "rear": req.rear})
+    result = await battle_engine.start(
+        {"front": req.front, "rear": req.rear}, equipment_dict
+    )
     return {"ok": True, "phase": game_state.phase, **result}
 
 

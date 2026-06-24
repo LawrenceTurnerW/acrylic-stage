@@ -1,0 +1,51 @@
+# =============================================================================
+# Acrylic Stage - ドロップアクセサリー定義
+# =============================================================================
+# 3 種類 × 3 レアリティ = 9 アイテム。
+# 戦闘勝利時に 1 個ドロップ → localStorage の inventory に蓄積、
+# 各キャラに 1 個まで装備可能(同種を複数キャラに装備するのは OK)。
+#
+# 効果は build_ally 時に Combatant に反映する(attack / max_tension は
+# 加算、gauge_per_turn_bonus は専用フィールドに保持)。
+# =============================================================================
+
+items:
+  power_brooch:
+    name: "パワーのブローチ"
+    icon: "⚔️"
+    effect: attack        # combatant.attack += value
+    description: "攻撃力を上げる"
+    rarities:
+      N:  { value: 2,  label: "N"  }
+      R:  { value: 4,  label: "R"  }
+      SR: { value: 7,  label: "SR" }
+
+  heart_charm:
+    name: "ハートのお守り"
+    icon: "❤️"
+    effect: max_tension   # combatant.max_tension/tension += value
+    description: "最大テンション(HP)を上げる"
+    rarities:
+      N:  { value: 20,  label: "N"  }
+      R:  { value: 50,  label: "R"  }
+      SR: { value: 100, label: "SR" }
+
+  voice_ring:
+    name: "ボイスのリング"
+    icon: "💎"
+    effect: gauge_per_turn_bonus  # combatant.bonus_gauge_per_turn += value
+    description: "ターン毎の声援獲得を増やす"
+    rarities:
+      N:  { value: 3,  label: "N"  }
+      R:  { value: 6,  label: "R"  }
+      SR: { value: 10, label: "SR" }
+
+# ドロップ確率(レアリティ別、合計 1.0)
+drop_rarity_weights:
+  N:  0.60
+  R:  0.30
+  SR: 0.10
+
+# ドロップ条件
+drop_on_win: 1   # 勝利時に何個ドロップするか
+drop_on_lose: 0  # 敗北時 (0 = ドロップなし)

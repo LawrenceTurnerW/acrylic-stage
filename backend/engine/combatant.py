@@ -94,6 +94,10 @@ class Combatant:
     status_effects: list[StatusEffect] = field(default_factory=list)
     dots: list[DamageOverTime] = field(default_factory=list)
 
+    # 装備品(ドロップアクセサリー)による加算分
+    bonus_gauge_per_turn: int = 0
+    equipment: dict[str, Any] | None = None  # {"kind", "rarity", "name", "icon", "effect", "value"}
+
     @property
     def downed(self) -> bool:
         return self.tension <= 0
@@ -201,6 +205,7 @@ class Combatant:
             "downed": self.downed,
             "status_effects": [e.to_dict() for e in self.status_effects],
             "dots": [d.to_dict() for d in self.dots],
+            "equipment": self.equipment,
         }
 
 
