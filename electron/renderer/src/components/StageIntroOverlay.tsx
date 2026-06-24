@@ -2,29 +2,24 @@
 // SPEC §8 では 3 秒のステージ告知 → コンディション発表 と分かれているが、
 // Day 3 では一緒くたに 2.4 秒で出して消す簡易版にしている。
 //
-// CSS keyframes (styles.css の .stage-intro) で fade in/out するだけで、
-// プレイヤーがクリックしなくても自動退場する。
+// CSS keyframes (styles.css の .stage-intro) で fade in/out するだけ。
+// 親側で `showingStageIntro && <StageIntroOverlay ...>` でマウント制御するので
+// このコンポーネント自体は visible state を持たず、onDone でアンマウントされる。
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { Stage } from "../types/character";
 
 const DURATION_MS = 2400;
 
 export function StageIntroOverlay(props: { stage: Stage; onDone: () => void }) {
-  const [visible, setVisible] = useState(true);
+  const { stage, onDone } = props;
 
   useEffect(() => {
-    const t = window.setTimeout(() => {
-      setVisible(false);
-      props.onDone();
-    }, DURATION_MS);
+    const t = window.setTimeout(onDone, DURATION_MS);
     return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onDone]);
 
-  if (!visible) return null;
-
-  const accent = props.stage.theme.accent_color ?? "#FFB84D";
+  const accent = stage.theme.accent_color ?? "#FFB84D";
 
   return (
     <div
@@ -63,10 +58,10 @@ export function StageIntroOverlay(props: { stage: Stage; onDone: () => void }) {
             padding: "0 40px",
           }}
         >
-          {props.stage.name}
+          {stage.name}
         </div>
         <div style={{ fontSize: 14, opacity: 0.7, marginTop: 16 }}>
-          {props.stage.description}
+          {stage.description}
         </div>
       </div>
     </div>

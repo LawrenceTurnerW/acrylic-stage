@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TitleScreen } from "./components/TitleScreen";
 import { BattleScreen } from "./components/BattleScreen";
 import { CalibrationScreen } from "./components/CalibrationScreen";
@@ -24,8 +24,9 @@ export default function App() {
   const [formation, setFormation] = useState<Formation>({ front: [], rear: [] });
   const [log, setLog] = useState<string[]>([]);
   const logRef = useRef<string[]>([]);
-  // ステージ告知オーバーレイは初回 prepare 入場時に 1 度だけ出す
-  const [stageIntroShown, setStageIntroShown] = useState(false);
+  // ステージ告知オーバーレイは初回 prepare 入場時に 1 度だけ出す。
+  // 「見せたか」は useRef にしておけば再 render を誘発しない。
+  const stageIntroShownRef = useRef(false);
   const [showingStageIntro, setShowingStageIntro] = useState(false);
 
   const gameData = useGameData();
@@ -66,80 +67,86 @@ export default function App() {
 
   const goToPrepare = () => {
     setScreen("prepare");
-    if (!stageIntroShown && gameData.stage?.current) {
+    if (!stageIntroShownRef.current && gameData.stage?.current) {
+      stageIntroShownRef.current = true;
       setShowingStageIntro(true);
-      setStageIntroShown(true);
     }
   };
 
   const handleReady = async (f: Formation) => {
     setFormation(f);
     try {
-      await fetch(`${API_BASE}/start_battle`, {
+      const res = await fetch(`${API_BASE}/start_battle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(f),
       });
+      if (!res.ok) {
+        appendLog(`start_battle returned ${res.status}; staying on prepare`);
+        return;
+      }
     } catch (e) {
-      appendLog(`start_battle failed: ${e}`);
+      appendLog(`start_battle failed: ${e}; staying on prepare`);
+      return;
     }
     setScreen("battle");
   };
 
-  const header = useMemo(
-    () => (
-      <header
+  // header は毎レンダー生成。useMemo 化していたが deps が gameData / refs を
+  // 拾えず、初期レンダーの goToPrepare クロージャを抱え込んでナビ「編成」から
+  // ステージ告知が出ないバグになっていたので memo を外した。
+  // 中身は軽量(div + nav button 数個) なので render コストは無視できる。
+  const header = (
+    <header
+      style={{
+        padding: "10px 16px",
+        display: "flex",
+        alignItems: "center",
+        gap: 16,
+        borderBottom: "1px solid #2a2440",
+        background: "#0c0c12",
+      }}
+    >
+      <strong style={{ letterSpacing: 1 }}>Acrylic Stage</strong>
+      <span style={{ opacity: 0.6, fontSize: 12 }}>v0.2.0 (day-3)</span>
+      <span
         style={{
-          padding: "10px 16px",
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          borderBottom: "1px solid #2a2440",
-          background: "#0c0c12",
+          marginLeft: "auto",
+          fontSize: 12,
+          color:
+            status === "open"
+              ? "#7ee787"
+              : status === "connecting"
+                ? "#f0d774"
+                : "#ff7b72",
         }}
       >
-        <strong style={{ letterSpacing: 1 }}>Acrylic Stage</strong>
-        <span style={{ opacity: 0.6, fontSize: 12 }}>v0.2.0 (day-3)</span>
-        <span
-          style={{
-            marginLeft: "auto",
-            fontSize: 12,
-            color:
-              status === "open"
-                ? "#7ee787"
-                : status === "connecting"
-                  ? "#f0d774"
-                  : "#ff7b72",
-          }}
+        WS: {status}
+        {lastHeartbeat && lastHeartbeat.type === "heartbeat"
+          ? ` (seq=${lastHeartbeat.seq})`
+          : ""}
+      </span>
+      <nav style={{ display: "flex", gap: 6 }}>
+        <NavBtn active={screen === "title"} onClick={() => setScreen("title")}>
+          タイトル
+        </NavBtn>
+        <NavBtn
+          active={screen === "calibration"}
+          onClick={() => setScreen("calibration")}
         >
-          WS: {status}
-          {lastHeartbeat && lastHeartbeat.type === "heartbeat"
-            ? ` (seq=${lastHeartbeat.seq})`
-            : ""}
-        </span>
-        <nav style={{ display: "flex", gap: 6 }}>
-          <NavBtn active={screen === "title"} onClick={() => setScreen("title")}>
-            タイトル
-          </NavBtn>
-          <NavBtn
-            active={screen === "calibration"}
-            onClick={() => setScreen("calibration")}
-          >
-            キャリブレーション
-          </NavBtn>
-          <NavBtn active={screen === "prepare"} onClick={goToPrepare}>
-            編成
-          </NavBtn>
-          <NavBtn
-            active={screen === "battle"}
-            onClick={() => setScreen("battle")}
-          >
-            戦闘
-          </NavBtn>
-        </nav>
-      </header>
-    ),
-    [status, lastHeartbeat, screen],
+          キャリブレーション
+        </NavBtn>
+        <NavBtn active={screen === "prepare"} onClick={goToPrepare}>
+          編成
+        </NavBtn>
+        <NavBtn
+          active={screen === "battle"}
+          onClick={() => setScreen("battle")}
+        >
+          戦闘
+        </NavBtn>
+      </nav>
+    </header>
   );
 
   return (

@@ -11,7 +11,7 @@
 // クリックで入れ替える機能は持たない。ArUco の Y 座標 + キャリブレーション
 // しきい値が真実(SPEC §3.5 / §4.2)。
 
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import type { ServerEvent } from "../ws";
 import type {
   Character,
@@ -264,17 +264,23 @@ function FormationRow(props: {
         )}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        {/* スロット数は必ず 2 固定。key を position に紐付けることでキャラが
-            入れ替わっても DOM ノードを使い回し、stale な slot が残らない。
-            slot-fill アニメは FormationSlot 側で useEffect で再現する。 */}
+        {/* 外側のラッパーは位置で安定キー化(2 スロット固定で stale 防止)、
+            内側の filled/empty 要素には character.id ベースの key を付けて
+            React の reconciliation に unmount/remount させる。
+            これだけで CSS の slot-fill アニメは自動で再生される。 */}
         {[0, 1].map((i) => {
           const d = filled[i] ?? null;
           return (
-            <FormationSlot
-              key={`${props.title}-${i}`}
-              detection={d}
-              character={d ? props.charsById.get(d.marker_id) : null}
-            />
+            <div
+              key={i}
+              style={{ flex: 1, display: "flex" }}
+            >
+              <FormationSlot
+                key={d ? `c-${d.marker_id}` : "empty"}
+                detection={d}
+                character={d ? props.charsById.get(d.marker_id) : null}
+              />
+            </div>
           );
         })}
       </div>
@@ -287,27 +293,10 @@ function FormationSlot(props: {
   character: Character | null | undefined;
 }) {
   const { detection, character: c } = props;
-  const slotRef = useRef<HTMLDivElement>(null);
-  const lastCharId = useRef<string | null>(null);
-
-  // キャラが「変わった」瞬間にだけ slot-fill アニメをかける
-  // (DOM ノードは使い回しなので、CSS class を一時的に付け外し)
-  useEffect(() => {
-    const currentId = c?.id ?? null;
-    if (currentId && currentId !== lastCharId.current && slotRef.current) {
-      const el = slotRef.current;
-      el.classList.remove("slot-fill");
-      // 同じフレーム内で remove → add すると再生されないので reflow を挟む
-      void el.offsetWidth;
-      el.classList.add("slot-fill");
-    }
-    lastCharId.current = currentId;
-  }, [c?.id]);
 
   if (!c || !detection) {
     return (
       <div
-        ref={slotRef}
         className="empty-pulse"
         style={{
           flex: 1,
@@ -328,7 +317,7 @@ function FormationSlot(props: {
   const accent = c.personal_color;
   return (
     <div
-      ref={slotRef}
+      className="slot-fill"
       style={{
         flex: 1,
         height: 88,

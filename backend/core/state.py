@@ -46,6 +46,13 @@ class GameState:
         if not conditions:
             return
         weights = [float(c.get("probability", 0)) for c in conditions]
+        # 全 0 weight だと random.choices が ValueError を投げて起動に失敗する。
+        # 設定ミス時は均等抽選にフォールバックして起動は通す。
+        if sum(weights) <= 0:
+            logger.warning(
+                "all condition weights are zero; falling back to uniform"
+            )
+            weights = [1.0] * len(conditions)
         for ch in self.characters_cfg.get("characters", []):
             chosen = random.choices(conditions, weights=weights, k=1)[0]
             self._character_conditions[ch["id"]] = chosen

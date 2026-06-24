@@ -157,7 +157,9 @@ async def reset_to_prepare() -> dict[str, Any]:
 
 @app.post("/calibration")
 async def set_calibration(y_ratio: float) -> dict[str, Any]:
-    camera_loop.set_calibration(y_ratio)
+    # set_calibration は内部で同期 file IO を行うので、スライダードラッグ中の
+    # 高頻度呼び出しがイベントループをブロックしないよう to_thread で逃がす。
+    await asyncio.to_thread(camera_loop.set_calibration, y_ratio)
     return {"ok": True, "calibration_y_ratio": camera_loop.calibration_y_ratio}
 
 

@@ -14,15 +14,12 @@ const POS_LABEL: Record<string, string> = {
   front_risk: "前列(ハイリスク)",
 };
 
-type Variant = "full" | "compact";
-
 export function CharacterIntroPanel(props: {
   character: Character;
   unit?: Unit;
   attribute?: Attribute;
-  variant?: Variant;
 }) {
-  const { character: c, unit, attribute, variant = "full" } = props;
+  const { character: c, unit, attribute } = props;
   const accent = c.personal_color;
   const attrColor = attribute?.color ?? "#888";
 
@@ -31,12 +28,12 @@ export function CharacterIntroPanel(props: {
       className="fade-in"
       style={{
         borderRadius: 12,
-        padding: variant === "compact" ? 10 : 14,
+        padding: 14,
         background: `linear-gradient(135deg, ${accent}22, ${accent}05)`,
         border: `1px solid ${accent}66`,
         display: "flex",
         flexDirection: "column",
-        gap: variant === "compact" ? 8 : 12,
+        gap: 12,
       }}
     >
       {/* ヘッダー: カラーチップ + 名前 + ユニット/属性/ロール */}
@@ -45,7 +42,7 @@ export function CharacterIntroPanel(props: {
         <div style={{ minWidth: 0, flex: 1 }}>
           <div
             style={{
-              fontSize: variant === "compact" ? 15 : 18,
+              fontSize: 18,
               fontWeight: 700,
               letterSpacing: 0.5,
               whiteSpace: "nowrap",
@@ -99,33 +96,31 @@ export function CharacterIntroPanel(props: {
       )}
 
       {/* 必殺技カード(SPEC: 編成画面で大きく表示) */}
-      {variant === "full" && (
+      <div
+        style={{
+          padding: 10,
+          borderRadius: 8,
+          background: `linear-gradient(110deg, ${attrColor}33, transparent 70%)`,
+          border: `1px solid ${attrColor}66`,
+        }}
+      >
+        <div style={{ fontSize: 10, opacity: 0.7, letterSpacing: 1 }}>
+          必殺技 ・ {c.ultimate.type}
+        </div>
         <div
           style={{
-            padding: 10,
-            borderRadius: 8,
-            background: `linear-gradient(110deg, ${attrColor}33, transparent 70%)`,
-            border: `1px solid ${attrColor}66`,
+            fontSize: 15,
+            fontWeight: 700,
+            margin: "3px 0 5px",
+            color: "#fff",
           }}
         >
-          <div style={{ fontSize: 10, opacity: 0.7, letterSpacing: 1 }}>
-            必殺技 ・ {c.ultimate.type}
-          </div>
-          <div
-            style={{
-              fontSize: 15,
-              fontWeight: 700,
-              margin: "3px 0 5px",
-              color: "#fff",
-            }}
-          >
-            {c.ultimate.name}
-          </div>
-          <div style={{ fontSize: 11, opacity: 0.85, lineHeight: 1.5 }}>
-            {c.ultimate.description}
-          </div>
+          {c.ultimate.name}
         </div>
-      )}
+        <div style={{ fontSize: 11, opacity: 0.85, lineHeight: 1.5 }}>
+          {c.ultimate.description}
+        </div>
+      </div>
     </div>
   );
 }
