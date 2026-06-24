@@ -83,6 +83,7 @@ enemy_types:
         probability_per_turn: 0.25  # 25%で発動
         warning_turns: 2            # 2ターン後に発動
         damage_base: 50             # 該当列に50固定ダメージ
+        safe_threshold: 1           # 対象列に1体以下ならセーフ(4体を片側に詰める負担を緩和)
         variants:
           - kind: front_blast
             name: "前列爆撃"

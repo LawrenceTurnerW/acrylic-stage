@@ -332,6 +332,8 @@ class BattleEngine:
             "target_row": variant.get("target_row", "front"),
             "fires_on_turn": self.turn + warning_turns,
             "damage_base": damage_base,
+            # 対象列の生存数がこれ以下ならセーフ (デフォルト 1 = 1 体残ってもセーフ)
+            "safe_threshold": int(warn_cfg.get("safe_threshold", 1)),
         }
         await self._broadcast_action(
             {
@@ -399,9 +401,11 @@ class BattleEngine:
             # 該当列の生存味方を取得
             targets = [a for a in self.allies if a.row == target_row and not a.downed]
             on_fire = ann.get("on_fire", {})
+            safe_threshold = int(w.get("safe_threshold", 1))
 
-            if not targets:
-                # セーフ演出
+            if len(targets) <= safe_threshold:
+                # SAFE: 完全に空でなくても threshold 以下ならセーフ。
+                # アクスタを 4 体片側に詰める物理的負担を緩和するためのルール。
                 await self._broadcast_action(
                     {
                         "kind": "warning_safe",
@@ -410,6 +414,7 @@ class BattleEngine:
                         "actor_is_ally": False,
                         "variant_name": variant_name,
                         "target_row": target_row,
+                        "remaining_in_row": len(targets),
                         "turn": self.turn,
                         "message": on_fire.get("safe") or "ヒュー...セーフ!",
                     }
