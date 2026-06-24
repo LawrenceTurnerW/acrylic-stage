@@ -24,6 +24,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
+from . import calibration as calibration_store
 from .ws_manager import WSManager
 
 logger = logging.getLogger(__name__)
@@ -187,7 +188,19 @@ class CameraLoop:
         self._running = False
         self._opened_index: int | None = None  # 現在 cap が掴んでいる index
         self._switch_lock = asyncio.Lock()
-        self.calibration_y_ratio: float = 0.5
+
+        # 永続化されたキャリブレーションがあれば復元
+        saved = calibration_store.load()
+        try:
+            self.calibration_y_ratio = float(saved.get("calibration_y_ratio", 0.5))
+        except (TypeError, ValueError):
+            self.calibration_y_ratio = 0.5
+        self.calibration_y_ratio = max(0.0, min(1.0, self.calibration_y_ratio))
+        if saved:
+            logger.info(
+                "calibration restored: y_ratio=%.3f",
+                self.calibration_y_ratio,
+            )
 
         self._aruco_dict = cv2.aruco.getPredefinedDictionary(ARUCO_DICT)
         self._aruco_params = cv2.aruco.DetectorParameters()
@@ -294,6 +307,13 @@ class CameraLoop:
 
     def set_calibration(self, y_ratio: float) -> None:
         self.calibration_y_ratio = max(0.0, min(1.0, y_ratio))
+        try:
+            calibration_store.save(
+                {"calibration_y_ratio": self.calibration_y_ratio}
+            )
+        except Exception as e:  # noqa: BLE001
+            # 永続化失敗してもラン側は止めない(次回 0.5 に戻るだけ)
+            logger.warning("calibration save failed: %s", e)
 
     async def _run(self) -> None:
         cap = await asyncio.to_thread(self._open_camera)
