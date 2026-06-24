@@ -11,7 +11,7 @@
 // クリックで入れ替える機能は持たない。ArUco の Y 座標 + キャリブレーション
 // しきい値が真実(SPEC §3.5 / §4.2)。
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ServerEvent } from "../ws";
 import type {
   Character,
@@ -38,15 +38,31 @@ export function PrepareScreen(props: {
     return m;
   }, [charsData.characters]);
 
-  const detections = frame?.detections ?? [];
+  // Backend は通常 marker_id ごとに 1 件しか送らないが、誤検出やデバウンスの
+  // 都合で重複が出る可能性に備え、ここで dedupe する(同じ ID が front/rear に
+  // またがって現れたら front を優先 = 直感寄り)。
+  const detections = useMemo(() => {
+    const seen = new Map<number, ArucoFrame["detections"][number]>();
+    for (const d of frame?.detections ?? []) {
+      const prev = seen.get(d.marker_id);
+      if (!prev || (prev.row === "rear" && d.row === "front")) {
+        seen.set(d.marker_id, d);
+      }
+    }
+    return Array.from(seen.values());
+  }, [frame?.detections]);
 
   // 左端 (cx 小) から右端 (cx 大) で安定ソート → 2 枠ずつ取る
-  const front = [...detections]
-    .filter((d) => d.row === "front")
-    .sort((a, b) => a.cx - b.cx);
-  const rear = [...detections]
-    .filter((d) => d.row === "rear")
-    .sort((a, b) => a.cx - b.cx);
+  const front = useMemo(
+    () =>
+      detections.filter((d) => d.row === "front").sort((a, b) => a.cx - b.cx),
+    [detections],
+  );
+  const rear = useMemo(
+    () =>
+      detections.filter((d) => d.row === "rear").sort((a, b) => a.cx - b.cx),
+    [detections],
+  );
 
   const placed = front.length + rear.length;
   const selectedFront = front.slice(0, 2);
@@ -248,15 +264,19 @@ function FormationRow(props: {
         )}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        {filled.map((d, i) => (
-          // 新しいキャラがスロットに入った瞬間に slot-fill アニメが走るよう、
-          // 空のときと埋まったときで key を変える(React に別ノードと認識させる)
-          <FormationSlot
-            key={d ? `c-${d.marker_id}` : `empty-${props.title}-${i}`}
-            detection={d}
-            character={d ? props.charsById.get(d.marker_id) : null}
-          />
-        ))}
+        {/* スロット数は必ず 2 固定。key を position に紐付けることでキャラが
+            入れ替わっても DOM ノードを使い回し、stale な slot が残らない。
+            slot-fill アニメは FormationSlot 側で useEffect で再現する。 */}
+        {[0, 1].map((i) => {
+          const d = filled[i] ?? null;
+          return (
+            <FormationSlot
+              key={`${props.title}-${i}`}
+              detection={d}
+              character={d ? props.charsById.get(d.marker_id) : null}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -267,9 +287,27 @@ function FormationSlot(props: {
   character: Character | null | undefined;
 }) {
   const { detection, character: c } = props;
+  const slotRef = useRef<HTMLDivElement>(null);
+  const lastCharId = useRef<string | null>(null);
+
+  // キャラが「変わった」瞬間にだけ slot-fill アニメをかける
+  // (DOM ノードは使い回しなので、CSS class を一時的に付け外し)
+  useEffect(() => {
+    const currentId = c?.id ?? null;
+    if (currentId && currentId !== lastCharId.current && slotRef.current) {
+      const el = slotRef.current;
+      el.classList.remove("slot-fill");
+      // 同じフレーム内で remove → add すると再生されないので reflow を挟む
+      void el.offsetWidth;
+      el.classList.add("slot-fill");
+    }
+    lastCharId.current = currentId;
+  }, [c?.id]);
+
   if (!c || !detection) {
     return (
       <div
+        ref={slotRef}
         className="empty-pulse"
         style={{
           flex: 1,
@@ -290,14 +328,14 @@ function FormationSlot(props: {
   const accent = c.personal_color;
   return (
     <div
-      className="slot-fill"
+      ref={slotRef}
       style={{
         flex: 1,
         height: 88,
         borderRadius: 8,
         background: `linear-gradient(135deg, ${accent}44, ${accent}11)`,
         border: `1.5px solid ${accent}`,
-        color: accent, // slot-fill アニメで currentColor の glow になる
+        color: accent,
         display: "flex",
         alignItems: "center",
         gap: 10,
