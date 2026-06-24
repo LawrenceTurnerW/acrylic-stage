@@ -278,14 +278,17 @@ class BattleEngine:
             return
 
         # 2) ターン経過 gauge
-        # コンディション補正は base 分にのみ適用、装備の bonus はフラットに加算
+        # コンディション補正と キャラ固有 gauge_rate_mult を base 分に乗算、
+        # 装備の bonus_gauge_per_turn はフラットに加算(item は固定値)
         gauge_per_turn = int(base_params.get("gauge_per_turn", 5))
         for ally in self.allies:
             if not ally.downed:
-                mult = 1.0
+                cond_mult = 1.0
                 if ally.condition:
-                    mult = float(ally.condition.get("gauge_multiplier", 1.0))
-                base_gain = int(round(gauge_per_turn * mult))
+                    cond_mult = float(ally.condition.get("gauge_multiplier", 1.0))
+                base_gain = int(
+                    round(gauge_per_turn * cond_mult * ally.gauge_rate_mult)
+                )
                 ally.gain_gauge(base_gain + ally.bonus_gauge_per_turn)
 
         # 3) 行動順を素早さ降順で確定(同率はランダム並び替え)
@@ -466,10 +469,20 @@ class BattleEngine:
                     )
                 )
                 victims: list[dict[str, Any]] = []
+                base_params = self.game_state.characters_cfg.get("base_params", {})
+                hit_gain = int(base_params.get("gauge_per_hit_taken", 10))
                 for ally in targets:
                     final = max(damage_minimum, damage_base - ally.defense)
                     actual = ally.take_damage(final)
-                    # 被弾時のゲージ獲得は削除済み
+                    if not ally.downed and hit_gain > 0:
+                        cond_mult = (
+                            float(ally.condition.get("gauge_multiplier", 1.0))
+                            if ally.condition
+                            else 1.0
+                        )
+                        ally.gain_gauge(
+                            int(round(hit_gain * cond_mult * ally.gauge_rate_mult))
+                        )
                     victims.append(
                         {
                             "ally_id": ally.id,
@@ -583,15 +596,29 @@ class BattleEngine:
         actual = target.take_damage(damage)
 
         # 声援ゲージ(味方のみ、SPEC §4.1)
-        # 被弾時のゲージ獲得は削除(SPEC 簡素化、アクセサリー追加とのトレード)
+        # 攻撃時 / 被弾時の両方で加算する。コンディション補正に加えて
+        # キャラ固有 gauge_rate_mult を掛けることで、ヒーラー早撃ち/アタッカー
+        # 溜め長めの傾向を作って全員同タイミング発動を防ぐ。
         if actor.is_ally:
             gauge_gain = int(base_params.get("gauge_per_normal_attack", 20))
-            mult = (
+            cond_mult = (
                 float(actor.condition.get("gauge_multiplier", 1.0))
                 if actor.condition
                 else 1.0
             )
-            actor.gain_gauge(int(round(gauge_gain * mult)))
+            actor.gain_gauge(
+                int(round(gauge_gain * cond_mult * actor.gauge_rate_mult))
+            )
+        if target.is_ally and not target.downed:
+            hit_gain = int(base_params.get("gauge_per_hit_taken", 10))
+            cond_mult = (
+                float(target.condition.get("gauge_multiplier", 1.0))
+                if target.condition
+                else 1.0
+            )
+            target.gain_gauge(
+                int(round(hit_gain * cond_mult * target.gauge_rate_mult))
+            )
 
         message = self._compose_message(actor, target, actual)
 

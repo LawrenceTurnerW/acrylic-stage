@@ -98,6 +98,10 @@ class Combatant:
     bonus_gauge_per_turn: int = 0
     equipment: dict[str, Any] | None = None  # {"kind", "rarity", "name", "icon", "effect", "value"}
 
+    # キャラ固有のゲージ蓄積倍率 (1.0 = 標準)。
+    # ヒーラー/サポーターは大きめ、アタッカーは小さめにして必殺発動タイミングを desync する
+    gauge_rate_mult: float = 1.0
+
     @property
     def downed(self) -> bool:
         return self.tension <= 0
@@ -227,7 +231,8 @@ def build_ally(
     speed = _stat_value(character["stats"]["speed"], stat_to_stars["speed"])
 
     max_tension = int(base_params.get("starting_tension", 100))
-    max_gauge = int(base_params.get("max_gauge", 100))
+    # max_gauge はキャラ毎の上書きを優先(ヒーラー早め / アタッカー遅めで desync)
+    max_gauge = int(character.get("max_gauge", base_params.get("max_gauge", 100)))
     return Combatant(
         id=character["id"],
         name=character["name"],
@@ -248,6 +253,7 @@ def build_ally(
         position_preference=character.get("position_preference"),
         condition=character.get("condition"),
         ultimate=character.get("ultimate"),
+        gauge_rate_mult=float(character.get("gauge_rate_mult", 1.0)),
     )
 
 
