@@ -4,6 +4,10 @@ import { BattleScreen } from "./components/BattleScreen";
 import { CalibrationScreen } from "./components/CalibrationScreen";
 import { PrepareScreen } from "./components/PrepareScreen";
 import { StageIntroOverlay } from "./components/StageIntroOverlay";
+import {
+  UltimateFlash,
+  type UltimateFlashPayload,
+} from "./components/UltimateFlash";
 import { useGameData } from "./hooks/useGameData";
 import {
   connectLiveWS,
@@ -36,8 +40,18 @@ export default function App() {
   // 「見せたか」は useRef にしておけば再 render を誘発しない。
   const stageIntroShownRef = useRef(false);
   const [showingStageIntro, setShowingStageIntro] = useState(false);
+  // 必殺技フラッシュは battle_action を受けた瞬間にキューに積み、表示が
+  // 終わったら次へ進める(連続発動でも見落とさないように)
+  const [ultimateQueue, setUltimateQueue] = useState<UltimateFlashPayload[]>(
+    [],
+  );
 
   const gameData = useGameData();
+  // gameData は WS のクロージャから常に最新を参照したいので ref を併走させる
+  const gameDataRef = useRef(gameData);
+  useEffect(() => {
+    gameDataRef.current = gameData;
+  }, [gameData]);
 
   const appendLog = (line: string) => {
     logRef.current = [
@@ -69,9 +83,33 @@ export default function App() {
             setBattleState({ turn, finished, result, allies, enemies });
             break;
           }
-          case "battle_action":
+          case "battle_action": {
             if (e.message) appendLog(`T${("turn" in e ? e.turn : "?")}: ${e.message}`);
+            // 必殺技なら派手なフラッシュ用にキューに積む
+            if (e.kind === "ultimate") {
+              const charsData = gameDataRef.current.characters;
+              const char = charsData?.characters.find(
+                (c) => c.id === e.actor_id,
+              );
+              const accent = char?.personal_color ?? "#7eb6ff";
+              const attrColor =
+                char && charsData
+                  ? charsData.attributes[char.attribute]?.color ?? accent
+                  : accent;
+              setUltimateQueue((q) => [
+                ...q,
+                {
+                  actor_name: e.actor_name,
+                  ultimate_name: e.ultimate_name,
+                  ultimate_type: e.ultimate_type,
+                  accent_color: accent,
+                  attribute_color: attrColor,
+                  message: e.message,
+                },
+              ]);
+            }
             break;
+          }
           case "battle_end":
             appendLog(
               `■ battle_end result=${e.result}${e.mvp_id ? ` MVP=${e.mvp_id}` : ""}`,
@@ -210,6 +248,12 @@ export default function App() {
         <StageIntroOverlay
           stage={gameData.stage.current}
           onDone={() => setShowingStageIntro(false)}
+        />
+      )}
+      {ultimateQueue.length > 0 && (
+        <UltimateFlash
+          payload={ultimateQueue[0]}
+          onDone={() => setUltimateQueue((q) => q.slice(1))}
         />
       )}
     </div>

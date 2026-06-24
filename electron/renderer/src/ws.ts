@@ -31,6 +31,19 @@ export type ArucoDetection = {
   row: "front" | "rear";
 };
 
+export type StatusEffect = {
+  kind: "attack_buff" | "speed_debuff" | string;
+  multiplier: number;
+  turns_left: number;
+  source: string;
+};
+
+export type DotState = {
+  name: string;
+  damage: number;
+  turns_left: number;
+};
+
 export type Combatant = {
   id: string;
   name: string;
@@ -62,6 +75,8 @@ export type Combatant = {
   icon: string | null;
   is_boss: boolean;
   downed: boolean;
+  status_effects: StatusEffect[];
+  dots: DotState[];
 };
 
 export type BattleStateSnapshot = {
@@ -82,6 +97,44 @@ export type BattleAction =
       target_name: string;
       damage: number;
       target_downed: boolean;
+      turn: number;
+      message: string;
+    }
+  | {
+      kind: "ultimate";
+      actor_id: string;
+      actor_name: string;
+      actor_is_ally: boolean;
+      ultimate_name: string;
+      ultimate_type: string;
+      primary_target_id: string | null;
+      primary_target_name: string | null;
+      targets_hit: string[];
+      total_damage: number;
+      healed_count: number;
+      healed_total: number;
+      buffed_count: number;
+      debuffed_count: number;
+      dot_applied: string[];
+      turn: number;
+      message: string;
+    }
+  | {
+      kind: "dot_tick";
+      actor_id: string;
+      actor_name: string;
+      actor_is_ally: boolean;
+      dot_name: string;
+      damage: number;
+      target_downed: boolean;
+      turn: number;
+      message: string;
+    }
+  | {
+      kind: "skip";
+      actor_id: string;
+      actor_name: string;
+      actor_is_ally: boolean;
       turn: number;
       message: string;
     }

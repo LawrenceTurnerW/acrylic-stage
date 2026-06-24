@@ -1,21 +1,12 @@
-"""自動進行型バトルエンジン (Day 4 スコープ)。
+"""自動進行型バトルエンジン (Day 5)。
 
-仕様:
-- 開始時に味方 Combatant / 敵 Combatant を YAML から組み立てる
-- ターン間隔 base_params.turn_interval_sec (デフォルト 5 秒) で 1 ターン進行
-- 各ターン:
-  - 行動順は素早さ降順(同率はランダム)
-  - 生存中の全アクターが順に 1 行動(現状は通常攻撃のみ)
-  - ターン経過の声援ゲージ累積を全味方に適用
-- 行動詳細を battle_action として broadcast、状態スナップショットを
-  battle_state として broadcast
-- 全味方ダウン → defeat / 全敵ダウン → victory で battle_end を broadcast
+Day 4 にあった通常攻撃 + ターン進行に加え、Day 5 で以下を追加:
+- ゲージ満タンで必殺技自動発動 (engine/effects.py の dispatch)
+- コンディション「寝不足」の skip_chance による行動スキップ
+- 状態効果 (attack_buff / speed_debuff) と DoT (延焼/毒) のターン tick
+- effective_attack / effective_speed の反映 (バフ・デバフ込み)
 
-Day 5 以降で追加するもの:
-- 必殺技発動(声援 100 でフラグ)
-- DoT (延焼/毒)
-- バフ/デバフ (素早さ debuff 等)
-- ボスの警告攻撃ギミック
+Day 6 で追加: ボスの警告攻撃ギミック (前列爆撃 / 後列狙撃)。
 """
 
 from __future__ import annotations
@@ -29,6 +20,7 @@ from typing import Any
 from .combatant import Combatant, build_ally, build_enemy
 from .damage import calculate_damage
 from .dialogue import pick_dialogue, pick_system_message
+from .effects import execute_ultimate
 from .targeting import (
     DEFAULT_TARGET_STRATEGIES,
     pick_target_for_ally,
@@ -205,11 +197,22 @@ class BattleEngine:
             logger.exception("battle loop crashed: %s", e)
 
     async def _step_turn(self) -> None:
-        """1 ターン分の進行: ターン経過 gauge + 全アクターが行動。"""
+        """1 ターン分の進行:
+        1) DoT 適用 (味方/敵共に)
+        2) ターン経過 gauge 加算 (味方のみ)
+        3) 行動順を確定して各アクター行動
+        4) 状態効果の turns_left 減算
+        """
         base_params = self.game_state.characters_cfg.get("base_params", {})
-        gauge_per_turn = int(base_params.get("gauge_per_turn", 5))
 
-        # ターン経過の声援(味方のみ)
+        # 1) DoT
+        await self._apply_dot_ticks()
+        self._check_end()
+        if self.finished:
+            return
+
+        # 2) ターン経過 gauge
+        gauge_per_turn = int(base_params.get("gauge_per_turn", 5))
         for ally in self.allies:
             if not ally.downed:
                 mult = 1.0
@@ -217,23 +220,69 @@ class BattleEngine:
                     mult = float(ally.condition.get("gauge_multiplier", 1.0))
                 ally.gain_gauge(int(round(gauge_per_turn * mult)))
 
-        # 行動順を素早さ降順で確定(同率は ramdom 並び替え)
+        # 3) 行動順を素早さ降順で確定(同率はランダム並び替え)
         actors = self._build_action_order()
-
         for actor in actors:
             if self.finished:
                 break
             if actor.downed:
                 continue
-            await self._act_normal(actor)
+            # 寝不足の行動スキップ
+            if (
+                actor.is_ally
+                and actor.condition
+                and random.random() < float(actor.condition.get("skip_chance", 0.0))
+            ):
+                await self._broadcast_action(
+                    {
+                        "kind": "skip",
+                        "actor_id": actor.id,
+                        "actor_name": actor.name,
+                        "actor_is_ally": True,
+                        "turn": self.turn,
+                        "message": f"{actor.name} は寝不足で動けない…",
+                    }
+                )
+                continue
+            # 味方でゲージ満タンなら必殺技、それ以外は通常攻撃
+            if actor.is_ally and actor.gauge >= actor.max_gauge and actor.ultimate:
+                await self._act_ultimate(actor)
+            else:
+                await self._act_normal(actor)
             self._check_end()
+
+        # 4) ターン頭ではなく終わりに status_effects を tick
+        # (今ターンに付与された buff/debuff が当ターン中に効くようにするため)
+        for c in (*self.allies, *self.enemies):
+            c.tick_status_effects()
+
+    async def _apply_dot_ticks(self) -> None:
+        """DoT を全アクターに適用し、ダメージを broadcast。"""
+        for c in (*self.allies, *self.enemies):
+            if c.downed:
+                continue
+            applied = c.tick_dots()
+            for name, dmg in applied:
+                await self._broadcast_action(
+                    {
+                        "kind": "dot_tick",
+                        "actor_id": c.id,
+                        "actor_name": c.name,
+                        "actor_is_ally": c.is_ally,
+                        "dot_name": name,
+                        "damage": dmg,
+                        "target_downed": c.downed,
+                        "turn": self.turn,
+                        "message": f"{c.name} に {name} {dmg}",
+                    }
+                )
 
     def _build_action_order(self) -> list[Combatant]:
         combined: list[Combatant] = [
             c for c in (*self.allies, *self.enemies) if not c.downed
         ]
-        # 同 speed のシャッフルのため、tie-breaker をランダム
-        combined.sort(key=lambda c: (-c.speed, random.random()))
+        # effective_speed でデバフ反映、同率はランダム並び替え
+        combined.sort(key=lambda c: (-c.effective_speed(), random.random()))
         return combined
 
     # -------- 内部: アクション --------
@@ -262,7 +311,7 @@ class BattleEngine:
         base_params = self.game_state.characters_cfg.get("base_params", {})
 
         damage = calculate_damage(
-            attacker_attack=actor.attack,
+            attacker_attack=int(round(actor.effective_attack())),
             target_defense=target.defense,
             attacker_position_preference=actor.position_preference,
             attacker_row=actor.row,
@@ -326,6 +375,58 @@ class BattleEngine:
                     "message": downed_msg or f"{target.name} ダウン...",
                 }
             )
+
+    async def _act_ultimate(self, actor: Combatant) -> None:
+        """必殺技 1 発動。発動後ゲージ 0。"""
+        position_modifiers = self.game_state.characters_cfg.get(
+            "position_modifiers", {}
+        )
+        base_params = self.game_state.characters_cfg.get("base_params", {})
+
+        line = pick_dialogue(
+            self.game_state.dialogue_cfg, actor.id, "ultimate"
+        )
+        ult_name = (actor.ultimate or {}).get("name", "?")
+        msg = (
+            f"{actor.name}「{line}」"
+            if line
+            else f"{actor.name} の必殺技!{ult_name}!"
+        )
+
+        result = execute_ultimate(
+            actor,
+            self.allies,
+            self.enemies,
+            position_modifiers=position_modifiers,
+            damage_minimum=int(base_params.get("damage_minimum", 1)),
+            line_message=msg,
+        )
+        actor.reset_gauge()
+
+        await self._broadcast_action(
+            {
+                "kind": "ultimate",
+                "actor_id": actor.id,
+                "actor_name": actor.name,
+                "actor_is_ally": True,
+                "turn": self.turn,
+                **result.to_dict(),
+            }
+        )
+
+        # 倒れた敵を broadcast
+        for e in self.enemies:
+            if e.id in result.targets_hit and e.downed:
+                await self._broadcast_action(
+                    {
+                        "kind": "downed",
+                        "actor_id": e.id,
+                        "actor_name": e.name,
+                        "actor_is_ally": False,
+                        "turn": self.turn,
+                        "message": f"{e.name} を撃破!",
+                    }
+                )
 
     def _compose_message(
         self, actor: Combatant, target: Combatant, damage: int

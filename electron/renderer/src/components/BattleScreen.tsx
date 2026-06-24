@@ -14,7 +14,9 @@
 import type {
   BattleStateSnapshot,
   Combatant,
+  DotState,
   ServerEvent,
+  StatusEffect,
 } from "../ws";
 import type {
   Attribute,
@@ -250,6 +252,7 @@ function EnemyCard(props: { enemy: Combatant }) {
         max={e.max_tension}
         color={e.is_boss ? "#f0a774" : "#9bd17e"}
       />
+      <StatusBadges effects={e.status_effects} dots={e.dots} />
       {e.downed && (
         <div style={{ fontSize: 10, opacity: 0.7, marginTop: 4 }}>撃破</div>
       )}
@@ -397,6 +400,7 @@ function AllyCard(props: {
         max={a.max_gauge}
         color={ready ? "#ffd86b" : accent}
       />
+      <StatusBadges effects={a.status_effects} dots={a.dots} />
     </div>
   );
 }
@@ -498,3 +502,60 @@ function EmptyHint() {
 
 // 備考: 現状 ResultBanner には mvp_id を渡せていない (App から battle_end を
 // 取り回す配線が未完)。Day 5 で battle_end ハンドラを足して MVP を表示する。
+
+function StatusBadges(props: { effects: StatusEffect[]; dots: DotState[] }) {
+  const items = [
+    ...props.effects.map((e) => ({
+      key: `eff-${e.kind}-${e.source}`,
+      label:
+        e.kind === "attack_buff"
+          ? `攻↑×${e.multiplier.toFixed(1)}`
+          : e.kind === "speed_debuff"
+            ? `速↓×${e.multiplier.toFixed(1)}`
+            : e.kind,
+      turns: e.turns_left,
+      color:
+        e.kind === "attack_buff"
+          ? "#ffd86b"
+          : e.kind === "speed_debuff"
+            ? "#7eb6ff"
+            : "#aaa",
+    })),
+    ...props.dots.map((d) => ({
+      key: `dot-${d.name}`,
+      label: `${d.name} -${d.damage}`,
+      turns: d.turns_left,
+      color: "#ff7b72",
+    })),
+  ];
+  if (items.length === 0) return null;
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 4,
+        flexWrap: "wrap",
+        marginTop: 2,
+      }}
+    >
+      {items.map((b) => (
+        <span
+          key={b.key}
+          className="status-badge"
+          style={{
+            fontSize: 9,
+            padding: "1px 5px",
+            borderRadius: 4,
+            background: `${b.color}33`,
+            border: `1px solid ${b.color}88`,
+            color: b.color,
+            whiteSpace: "nowrap",
+          }}
+          title={`残 ${b.turns} ターン`}
+        >
+          {b.label}({b.turns}T)
+        </span>
+      ))}
+    </div>
+  );
+}

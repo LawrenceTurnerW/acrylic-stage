@@ -18,6 +18,44 @@ from typing import Any
 
 
 @dataclass
+class StatusEffect:
+    """攻撃力バフ・素早さデバフなどの一時的な乗算効果。
+
+    Battle engine が毎ターン頭に turns_left を 1 ずつ減らし、0 になったものは
+    cull する。multiplier は damage/speed 計算時に積算される。
+    """
+
+    kind: str  # "attack_buff" | "speed_debuff"
+    multiplier: float
+    turns_left: int
+    source: str  # 表示用(必殺技名など)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "multiplier": self.multiplier,
+            "turns_left": self.turns_left,
+            "source": self.source,
+        }
+
+
+@dataclass
+class DamageOverTime:
+    """延焼・毒など、毎ターン固定ダメージを与える状態。"""
+
+    name: str  # "延焼" | "毒"
+    damage: int
+    turns_left: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "damage": self.damage,
+            "turns_left": self.turns_left,
+        }
+
+
+@dataclass
 class Combatant:
     id: str  # 味方は character.id ("nanami_rona"), 敵は stage 上の enemy.id ("heat_golem")
     name: str
@@ -52,6 +90,10 @@ class Combatant:
     # 敵のみ: 行動定義
     behavior: dict[str, Any] = field(default_factory=dict)
 
+    # ランタイム状態効果
+    status_effects: list[StatusEffect] = field(default_factory=list)
+    dots: list[DamageOverTime] = field(default_factory=list)
+
     @property
     def downed(self) -> bool:
         return self.tension <= 0
@@ -62,9 +104,75 @@ class Combatant:
         self.tension = max(0, self.tension - amount)
         return before - self.tension
 
+    def heal(self, amount: int) -> int:
+        """ヒール。実際に回復した量を返す。"""
+        if self.downed:
+            return 0
+        before = self.tension
+        self.tension = min(self.max_tension, self.tension + amount)
+        return self.tension - before
+
     def gain_gauge(self, amount: int) -> None:
         """声援ゲージを増やす。上限でクランプ。"""
         self.gauge = min(self.max_gauge, self.gauge + amount)
+
+    def reset_gauge(self) -> None:
+        self.gauge = 0
+
+    # ---- 状態効果 -----------------------------------------------------
+
+    def add_status_effect(self, effect: StatusEffect) -> None:
+        # 同 kind + same source は上書き(重ね掛け防止)。違う source なら共存。
+        for e in self.status_effects:
+            if e.kind == effect.kind and e.source == effect.source:
+                e.multiplier = effect.multiplier
+                e.turns_left = effect.turns_left
+                return
+        self.status_effects.append(effect)
+
+    def add_dot(self, dot: DamageOverTime) -> None:
+        for d in self.dots:
+            if d.name == dot.name:
+                d.damage = dot.damage
+                d.turns_left = dot.turns_left
+                return
+        self.dots.append(dot)
+
+    def tick_dots(self) -> list[tuple[str, int]]:
+        """各 DoT を 1 ターン分処理。実際に受けた (name, damage) のリストを返す。
+        ターン残数も同時に減らし、0 になったものを除去する。
+        """
+        applied: list[tuple[str, int]] = []
+        for d in self.dots:
+            if self.downed:
+                break
+            actual = self.take_damage(d.damage)
+            if actual > 0:
+                applied.append((d.name, actual))
+        # ターン経過
+        for d in self.dots:
+            d.turns_left -= 1
+        self.dots = [d for d in self.dots if d.turns_left > 0]
+        return applied
+
+    def tick_status_effects(self) -> None:
+        for e in self.status_effects:
+            e.turns_left -= 1
+        self.status_effects = [e for e in self.status_effects if e.turns_left > 0]
+
+    def effective_attack(self) -> float:
+        m = 1.0
+        for e in self.status_effects:
+            if e.kind == "attack_buff":
+                m *= e.multiplier
+        return self.attack * m
+
+    def effective_speed(self) -> float:
+        m = 1.0
+        for e in self.status_effects:
+            if e.kind == "speed_debuff":
+                m *= e.multiplier
+        return self.speed * m
 
     def to_dict(self) -> dict[str, Any]:
         """WS broadcast 用のシリアライザ。"""
@@ -91,6 +199,8 @@ class Combatant:
             "icon": self.icon,
             "is_boss": self.is_boss,
             "downed": self.downed,
+            "status_effects": [e.to_dict() for e in self.status_effects],
+            "dots": [d.to_dict() for d in self.dots],
         }
 
 
