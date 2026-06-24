@@ -296,9 +296,9 @@ base_params:
   max_gauge: 100               # 必殺発動値
   turn_interval_sec: 5         # ターン間隔(秒)
   gauge_per_normal_attack: 20  # 通常攻撃時のゲージ獲得
-  gauge_per_hit_taken: 10      # 被弾時のゲージ獲得
   gauge_per_turn: 5            # ターン経過時のゲージ獲得
   damage_minimum: 1            # 最低保証ダメージ
+  # 被弾時の声援獲得はドロップアクセサリー追加に伴いシンプル化のため削除
 
 # 配置補正
 position_modifiers:

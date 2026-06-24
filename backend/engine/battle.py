@@ -430,18 +430,7 @@ class BattleEngine:
                 for ally in targets:
                     final = max(damage_minimum, damage_base - ally.defense)
                     actual = ally.take_damage(final)
-                    # 被弾の声援も加算
-                    base = int(
-                        self.game_state.characters_cfg.get("base_params", {}).get(
-                            "gauge_per_hit_taken", 10
-                        )
-                    )
-                    mult = (
-                        float(ally.condition.get("gauge_multiplier", 1.0))
-                        if ally.condition
-                        else 1.0
-                    )
-                    ally.gain_gauge(int(round(base * mult)))
+                    # 被弾時のゲージ獲得は削除済み
                     victims.append(
                         {
                             "ally_id": ally.id,
@@ -555,6 +544,7 @@ class BattleEngine:
         actual = target.take_damage(damage)
 
         # 声援ゲージ(味方のみ、SPEC §4.1)
+        # 被弾時のゲージ獲得は削除(SPEC 簡素化、アクセサリー追加とのトレード)
         if actor.is_ally:
             gauge_gain = int(base_params.get("gauge_per_normal_attack", 20))
             mult = (
@@ -563,14 +553,6 @@ class BattleEngine:
                 else 1.0
             )
             actor.gain_gauge(int(round(gauge_gain * mult)))
-        if target.is_ally and not target.downed:
-            hit_gain = int(base_params.get("gauge_per_hit_taken", 10))
-            mult = (
-                float(target.condition.get("gauge_multiplier", 1.0))
-                if target.condition
-                else 1.0
-            )
-            target.gain_gauge(int(round(hit_gain * mult)))
 
         message = self._compose_message(actor, target, actual)
 
