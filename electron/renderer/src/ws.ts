@@ -146,6 +146,56 @@ export type BattleAction =
       turn: number;
       message: string;
     }
+  | {
+      kind: "warning_announce";
+      actor_id: string;
+      actor_name: string;
+      actor_is_ally: false;
+      variant_name: string;
+      variant_kind: string;
+      target_row: "front" | "rear";
+      fires_on_turn: number;
+      turns_left: number;
+      turn: number;
+      message: string;
+    }
+  | {
+      kind: "warning_countdown";
+      actor_id: string;
+      actor_name: string;
+      actor_is_ally: false;
+      variant_name: string;
+      target_row: "front" | "rear";
+      turns_left: number;
+      turn: number;
+      message: string;
+    }
+  | {
+      kind: "warning_fire";
+      actor_id: string;
+      actor_name: string;
+      actor_is_ally: false;
+      variant_name: string;
+      target_row: "front" | "rear";
+      victims: Array<{
+        ally_id: string;
+        ally_name: string;
+        damage: number;
+        downed: boolean;
+      }>;
+      turn: number;
+      message: string;
+    }
+  | {
+      kind: "warning_safe";
+      actor_id: string;
+      actor_name: string;
+      actor_is_ally: false;
+      variant_name: string;
+      target_row: "front" | "rear";
+      turn: number;
+      message: string;
+    }
   | { kind: "system"; message: string };
 
 export type WSStatus = "connecting" | "open" | "closed";

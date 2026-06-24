@@ -32,6 +32,7 @@ export function BattleScreen(props: {
   log: string[];
   formation: Formation;
   battleState: BattleStateSnapshot | null;
+  battleEnd: { result: "win" | "lose"; mvp_id: string | null; turn: number } | null;
   charsData: CharactersResponse | null;
   onReturnToPrepare: () => void;
 }) {
@@ -40,6 +41,7 @@ export function BattleScreen(props: {
     log,
     formation,
     battleState,
+    battleEnd,
     charsData,
     onReturnToPrepare,
   } = props;
@@ -134,7 +136,13 @@ export function BattleScreen(props: {
         )}
 
         {finished && (
-          <ResultBanner result={result} mvpId={null} allies={allies} />
+          <ResultBanner
+            result={battleEnd?.result ?? result}
+            mvpId={battleEnd?.mvp_id ?? null}
+            turn={battleEnd?.turn ?? battleState?.turn ?? 0}
+            allies={allies}
+            onRestart={onReturnToPrepare}
+          />
         )}
       </section>
 
@@ -451,7 +459,9 @@ function Meter(props: {
 function ResultBanner(props: {
   result: "win" | "lose" | null;
   mvpId: string | null;
+  turn: number;
   allies: Combatant[];
+  onRestart: () => void;
 }) {
   if (!props.result) return null;
   const win = props.result === "win";
@@ -461,7 +471,7 @@ function ResultBanner(props: {
       className="fade-in"
       style={{
         marginTop: "auto",
-        padding: 18,
+        padding: 20,
         borderRadius: 10,
         background: win
           ? "linear-gradient(135deg, #ffd86b33, #7eb6ff22)"
@@ -473,14 +483,47 @@ function ResultBanner(props: {
       <div style={{ fontSize: 12, opacity: 0.6, letterSpacing: 4 }}>
         {win ? "VICTORY" : "DEFEAT"}
       </div>
-      <div style={{ fontSize: 28, fontWeight: 800, marginTop: 4 }}>
+      <div style={{ fontSize: 32, fontWeight: 800, marginTop: 4 }}>
         {win ? "大成功!" : "今日はここまで..."}
       </div>
+      <div style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
+        {props.turn} ターンで {win ? "ステージ制覇" : "撤退"}
+      </div>
       {mvp && (
-        <div style={{ fontSize: 13, marginTop: 8, opacity: 0.85 }}>
-          MVP: {mvp.name}
+        <div
+          style={{
+            fontSize: 14,
+            marginTop: 10,
+            padding: "4px 12px",
+            display: "inline-block",
+            borderRadius: 16,
+            background: mvp.personal_color
+              ? `${mvp.personal_color}44`
+              : "rgba(255,255,255,0.08)",
+            border: `1px solid ${mvp.personal_color ?? "#888"}`,
+          }}
+        >
+          ✨ ベストパフォーマンス: {mvp.name}
         </div>
       )}
+      <div style={{ marginTop: 14 }}>
+        <button
+          onClick={props.onRestart}
+          style={{
+            padding: "8px 22px",
+            fontSize: 14,
+            fontWeight: 700,
+            letterSpacing: 2,
+            background: "linear-gradient(90deg, #ff7eb6, #7eb6ff)",
+            color: "#0f0f14",
+            border: "none",
+            borderRadius: 8,
+            cursor: "pointer",
+          }}
+        >
+          もう一度
+        </button>
+      </div>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   UltimateFlash,
   type UltimateFlashPayload,
 } from "./components/UltimateFlash";
+import { WarningBanner, WarningFlash } from "./components/WarningOverlay";
 import { useGameData } from "./hooks/useGameData";
 import {
   connectLiveWS,
@@ -21,6 +22,26 @@ type Screen = "title" | "calibration" | "prepare" | "battle";
 const API_BASE = "http://127.0.0.1:8000";
 
 export type Formation = { front: number[]; rear: number[] };
+
+// 図鑑エントリ: 戦闘終了ごとに localStorage に積み上げてタイトル画面で履歴表示
+export type DexiconEntry = {
+  date: string;
+  result: "win" | "lose";
+  turn: number;
+  mvp_id: string | null;
+  stage_id: string;
+};
+const DEXICON_KEY = "acrylic-stage:dexicon";
+
+export function loadDexicon(): DexiconEntry[] {
+  try {
+    return JSON.parse(
+      window.localStorage.getItem(DEXICON_KEY) ?? "[]",
+    ) as DexiconEntry[];
+  } catch {
+    return [];
+  }
+}
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("title");
@@ -45,6 +66,25 @@ export default function App() {
   const [ultimateQueue, setUltimateQueue] = useState<UltimateFlashPayload[]>(
     [],
   );
+  // 進行中の警告攻撃 (1 件想定 / SPEC §4.6 duplicate_prevention)
+  const [warning, setWarning] = useState<{
+    variant_name: string;
+    target_row: "front" | "rear";
+    turns_left: number;
+  } | null>(null);
+  // 警告爆発のフルスクリーン演出(hit / safe を 900ms 表示)
+  const [warningFlash, setWarningFlash] = useState<{
+    kind: "hit" | "safe";
+    message: string;
+    variant_name: string;
+    target_row: "front" | "rear";
+  } | null>(null);
+  // 戦闘終了情報(MVP 表示と「もう一度」ボタンで使う)
+  const [battleEnd, setBattleEnd] = useState<{
+    result: "win" | "lose";
+    mvp_id: string | null;
+    turn: number;
+  } | null>(null);
 
   const gameData = useGameData();
   // gameData は WS のクロージャから常に最新を参照したいので ref を併走させる
@@ -85,6 +125,36 @@ export default function App() {
           }
           case "battle_action": {
             if (e.message) appendLog(`T${("turn" in e ? e.turn : "?")}: ${e.message}`);
+            // 警告攻撃の状態管理
+            if (e.kind === "warning_announce") {
+              setWarning({
+                variant_name: e.variant_name,
+                target_row: e.target_row,
+                turns_left: e.turns_left,
+              });
+            } else if (e.kind === "warning_countdown") {
+              setWarning({
+                variant_name: e.variant_name,
+                target_row: e.target_row,
+                turns_left: e.turns_left,
+              });
+            } else if (e.kind === "warning_fire") {
+              setWarning(null);
+              setWarningFlash({
+                kind: "hit",
+                message: e.message,
+                variant_name: e.variant_name,
+                target_row: e.target_row,
+              });
+            } else if (e.kind === "warning_safe") {
+              setWarning(null);
+              setWarningFlash({
+                kind: "safe",
+                message: e.message,
+                variant_name: e.variant_name,
+                target_row: e.target_row,
+              });
+            }
             // 必殺技なら派手なフラッシュ用にキューに積む
             if (e.kind === "ultimate") {
               const charsData = gameDataRef.current.characters;
@@ -110,11 +180,37 @@ export default function App() {
             }
             break;
           }
-          case "battle_end":
+          case "battle_end": {
             appendLog(
               `■ battle_end result=${e.result}${e.mvp_id ? ` MVP=${e.mvp_id}` : ""}`,
             );
+            if (e.result) {
+              setBattleEnd({
+                result: e.result,
+                mvp_id: e.mvp_id,
+                turn: e.turn,
+              });
+              // 図鑑に記録(localStorage)。タイトル画面で履歴を見せる
+              try {
+                const prev = loadDexicon();
+                const entry: DexiconEntry = {
+                  date: new Date().toISOString(),
+                  result: e.result,
+                  turn: e.turn,
+                  mvp_id: e.mvp_id,
+                  stage_id:
+                    gameDataRef.current.stage?.current?.id ?? "stage_1",
+                };
+                window.localStorage.setItem(
+                  DEXICON_KEY,
+                  JSON.stringify([entry, ...prev].slice(0, 50)),
+                );
+              } catch (err) {
+                console.warn("dexicon save failed", err);
+              }
+            }
             break;
+          }
           case "camera_error":
             appendLog(`camera_error: ${e.message}`);
             break;
@@ -135,6 +231,10 @@ export default function App() {
   const handleReady = async (f: Formation) => {
     setFormation(f);
     setBattleState(null); // 前回の戦闘 state をクリア
+    setBattleEnd(null);
+    setWarning(null);
+    setWarningFlash(null);
+    setUltimateQueue([]);
     try {
       const res = await fetch(`${API_BASE}/start_battle`, {
         method: "POST",
@@ -232,6 +332,7 @@ export default function App() {
             log={log}
             formation={formation}
             battleState={battleState}
+            battleEnd={battleEnd}
             charsData={gameData.characters}
             onReturnToPrepare={async () => {
               try {
@@ -254,6 +355,21 @@ export default function App() {
         <UltimateFlash
           payload={ultimateQueue[0]}
           onDone={() => setUltimateQueue((q) => q.slice(1))}
+        />
+      )}
+      {warning && screen === "battle" && (
+        <WarningBanner
+          variant_name={warning.variant_name}
+          target_row={warning.target_row}
+          turns_left={warning.turns_left}
+        />
+      )}
+      {warningFlash && screen === "battle" && (
+        <WarningFlash
+          kind={warningFlash.kind}
+          message={warningFlash.message}
+          variant_name={warningFlash.variant_name}
+          onDone={() => setWarningFlash(null)}
         />
       )}
     </div>

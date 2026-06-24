@@ -130,3 +130,38 @@ button {
 .status-badge {
   animation: status-badge-pop 220ms ease-out;
 }
+
+@keyframes warning-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 24px rgba(255, 80, 80, 0.6);
+  }
+  50% {
+    transform: scale(1.03);
+    box-shadow: 0 0 36px rgba(255, 80, 80, 0.9);
+  }
+}
+
+@keyframes warning-flash-anim {
+  0% {
+    opacity: 0;
+    transform: scale(1.2);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.05);
+  }
+}
+
+.warning-flash {
+  animation: warning-flash-anim 900ms ease-out forwards;
+}

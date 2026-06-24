@@ -49,6 +49,10 @@ class BattleEngine:
         self.finished: bool = False
         self.result: str | None = None  # "win" | "lose" | None
 
+        # 警告攻撃 (ボス専用、SPEC §4.6)。ボス1体につき同時に1件まで保持。
+        # {boss_id: {"variant_name", "target_row", "fires_on_turn"}}
+        self._pending_warnings: dict[str, dict[str, Any]] = {}
+
         self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
 
@@ -99,23 +103,48 @@ class BattleEngine:
     def update_ally_rows(self, detections: list[dict[str, Any]]) -> bool:
         """ArUco 検出結果に基づいて味方の row (front/rear) を上書きする。
 
-        戦闘中にアクスタを物理的に動かしたら反映させるためのフック
-        (現状は呼び出し元未実装、Day 5/6 の警告攻撃で使う)。
-        変更があったら True を返す。
+        戦闘中にアクスタを物理的に動かしたら反映させるためのフック。
+        変更があったら True を返す。row が変わったら row_changed イベントを
+        broadcast して UI 側でカード移動アニメを走らせる(broadcast は呼び出し
+        側のタスクで async にスケジュールする)。
         """
+        if self.finished or not self._running:
+            return False
         by_marker = {int(d["marker_id"]): d for d in detections}
         changed = False
         for ally in self.allies:
-            if ally.marker_id is None:
+            if ally.marker_id is None or ally.downed:
                 continue
             d = by_marker.get(ally.marker_id)
             if not d:
                 continue
             new_row = d.get("row")
             if new_row and new_row != ally.row:
+                old = ally.row
                 ally.row = new_row
                 changed = True
+                logger.info(
+                    "row changed: %s %s -> %s", ally.name, old, new_row
+                )
         return changed
+
+    def schedule_row_sync(self, detections: list[dict[str, Any]]) -> None:
+        """同期的に呼ばれる camera hook から非同期 broadcast に橋渡し。
+
+        ループが回っていない時 (idle / battle 終了済み) は何もしない。
+        row 変化があった時のみ battle_state を即時 broadcast する。
+        """
+        if self.finished or not self._running:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return  # event loop が無いコンテキストでは何もしない
+        if not self.update_ally_rows(detections):
+            return
+        # broadcast は eager にやる。これにより警告攻撃中の row 変更が
+        # 次ターンを待たず UI に伝わる。
+        loop.create_task(self._broadcast_state())
 
     # -------- 内部: セットアップ --------
 
@@ -244,17 +273,213 @@ class BattleEngine:
                     }
                 )
                 continue
-            # 味方でゲージ満タンなら必殺技、それ以外は通常攻撃
+            # 味方でゲージ満タンなら必殺技
             if actor.is_ally and actor.gauge >= actor.max_gauge and actor.ultimate:
                 await self._act_ultimate(actor)
+            elif (not actor.is_ally) and actor.is_boss:
+                # ボスはターン頭で警告攻撃を発動するか抽選する
+                fired_warning = await self._maybe_announce_warning(actor)
+                if not fired_warning:
+                    await self._act_normal(actor)
             else:
                 await self._act_normal(actor)
             self._check_end()
 
-        # 4) ターン頭ではなく終わりに status_effects を tick
-        # (今ターンに付与された buff/debuff が当ターン中に効くようにするため)
+        # 4) 警告攻撃で fires_on_turn を迎えたものをここで発動
+        await self._fire_pending_warnings()
+        self._check_end()
+
+        # 5) 状態効果の turns_left を減算 (今ターンに付与された buff/debuff が
+        #    当ターン中に効くよう、最後にまとめて減らす)
         for c in (*self.allies, *self.enemies):
             c.tick_status_effects()
+
+    async def _maybe_announce_warning(self, boss: Combatant) -> bool:
+        """ボスのターンに警告攻撃の予告を試みる。
+
+        既に予告中なら今回は通常攻撃(SPEC §4.6 duplicate_prevention)。
+        新規予告に踏み切ったら True を返す → 通常攻撃をスキップ。
+        """
+        if boss.id in self._pending_warnings:
+            # 予告中の残カウントダウンを 1 進める告知だけ流して通常攻撃側に任せる
+            await self._tick_warning_announce(boss.id)
+            return False
+
+        warn_cfg = boss.behavior.get("warning_attack")
+        if not warn_cfg:
+            return False
+        prob = float(warn_cfg.get("probability_per_turn", 0.25))
+        if random.random() >= prob:
+            return False
+
+        variants = warn_cfg.get("variants", [])
+        if not variants:
+            return False
+        weights = [float(v.get("weight", 1.0)) for v in variants]
+        variant = random.choices(variants, weights=weights, k=1)[0]
+        warning_turns = int(warn_cfg.get("warning_turns", 2))
+        damage_base = int(warn_cfg.get("damage_base", 50))
+
+        ann = warn_cfg.get("announcement", {})
+        msg_template = ann.get("turn_minus_2") or "⚠ 警告!"
+        msg = msg_template.format(variant_name=variant.get("name", "?"))
+
+        self._pending_warnings[boss.id] = {
+            "boss_id": boss.id,
+            "boss_name": boss.name,
+            "variant_name": variant.get("name", "?"),
+            "variant_kind": variant.get("kind", ""),
+            "target_row": variant.get("target_row", "front"),
+            "fires_on_turn": self.turn + warning_turns,
+            "damage_base": damage_base,
+        }
+        await self._broadcast_action(
+            {
+                "kind": "warning_announce",
+                "actor_id": boss.id,
+                "actor_name": boss.name,
+                "actor_is_ally": False,
+                "variant_name": variant.get("name", "?"),
+                "variant_kind": variant.get("kind", ""),
+                "target_row": variant.get("target_row", "front"),
+                "fires_on_turn": self.turn + warning_turns,
+                "turns_left": warning_turns,
+                "turn": self.turn,
+                "message": msg,
+            }
+        )
+        # 予告ターンはボスは通常攻撃しない
+        return True
+
+    async def _tick_warning_announce(self, boss_id: str) -> None:
+        """既に予告中のボスについて、毎ターン頭にカウントダウン表示を流す。"""
+        w = self._pending_warnings.get(boss_id)
+        if not w:
+            return
+        turns_left = max(0, w["fires_on_turn"] - self.turn)
+        if turns_left <= 0:
+            return
+        boss = next((e for e in self.enemies if e.id == boss_id), None)
+        if boss is None:
+            return
+        warn_cfg = boss.behavior.get("warning_attack", {})
+        ann = warn_cfg.get("announcement", {})
+        key = "turn_minus_1" if turns_left == 1 else "turn_minus_2"
+        tpl = ann.get(key) or "⚠ 警告!"
+        await self._broadcast_action(
+            {
+                "kind": "warning_countdown",
+                "actor_id": boss_id,
+                "actor_name": w["boss_name"],
+                "actor_is_ally": False,
+                "variant_name": w["variant_name"],
+                "target_row": w["target_row"],
+                "turns_left": turns_left,
+                "turn": self.turn,
+                "message": tpl.format(variant_name=w["variant_name"]),
+            }
+        )
+
+    async def _fire_pending_warnings(self) -> None:
+        """発動ターンを迎えた警告攻撃を解決する。"""
+        to_remove: list[str] = []
+        for boss_id, w in list(self._pending_warnings.items()):
+            if w["fires_on_turn"] != self.turn:
+                continue
+            boss = next((e for e in self.enemies if e.id == boss_id), None)
+            target_row = w["target_row"]
+            damage_base = int(w["damage_base"])
+            variant_name = w["variant_name"]
+            ann = (
+                boss.behavior.get("warning_attack", {}).get("announcement", {})
+                if boss
+                else {}
+            )
+
+            # 該当列の生存味方を取得
+            targets = [a for a in self.allies if a.row == target_row and not a.downed]
+            on_fire = ann.get("on_fire", {})
+
+            if not targets:
+                # セーフ演出
+                await self._broadcast_action(
+                    {
+                        "kind": "warning_safe",
+                        "actor_id": boss_id,
+                        "actor_name": w["boss_name"],
+                        "actor_is_ally": False,
+                        "variant_name": variant_name,
+                        "target_row": target_row,
+                        "turn": self.turn,
+                        "message": on_fire.get("safe") or "ヒュー...セーフ!",
+                    }
+                )
+            else:
+                # 該当列全員にダメージ(防御差し引き、最低 1)
+                damage_minimum = int(
+                    self.game_state.characters_cfg.get("base_params", {}).get(
+                        "damage_minimum", 1
+                    )
+                )
+                victims: list[dict[str, Any]] = []
+                for ally in targets:
+                    final = max(damage_minimum, damage_base - ally.defense)
+                    actual = ally.take_damage(final)
+                    # 被弾の声援も加算
+                    base = int(
+                        self.game_state.characters_cfg.get("base_params", {}).get(
+                            "gauge_per_hit_taken", 10
+                        )
+                    )
+                    mult = (
+                        float(ally.condition.get("gauge_multiplier", 1.0))
+                        if ally.condition
+                        else 1.0
+                    )
+                    ally.gain_gauge(int(round(base * mult)))
+                    victims.append(
+                        {
+                            "ally_id": ally.id,
+                            "ally_name": ally.name,
+                            "damage": actual,
+                            "downed": ally.downed,
+                        }
+                    )
+                msg_tpl = on_fire.get("hit") or "💥 {variant_name}!"
+                await self._broadcast_action(
+                    {
+                        "kind": "warning_fire",
+                        "actor_id": boss_id,
+                        "actor_name": w["boss_name"],
+                        "actor_is_ally": False,
+                        "variant_name": variant_name,
+                        "target_row": target_row,
+                        "victims": victims,
+                        "turn": self.turn,
+                        "message": msg_tpl.format(variant_name=variant_name),
+                    }
+                )
+                # 倒れた味方の broadcast
+                for v in victims:
+                    if v["downed"]:
+                        downed_msg = pick_dialogue(
+                            self.game_state.dialogue_cfg, v["ally_id"], "downed"
+                        )
+                        await self._broadcast_action(
+                            {
+                                "kind": "downed",
+                                "actor_id": v["ally_id"],
+                                "actor_name": v["ally_name"],
+                                "actor_is_ally": True,
+                                "turn": self.turn,
+                                "message": downed_msg or f"{v['ally_name']} ダウン...",
+                            }
+                        )
+
+            to_remove.append(boss_id)
+
+        for k in to_remove:
+            self._pending_warnings.pop(k, None)
 
     async def _apply_dot_ticks(self) -> None:
         """DoT を全アクターに適用し、ダメージを broadcast。"""

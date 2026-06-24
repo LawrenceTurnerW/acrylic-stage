@@ -20,6 +20,7 @@ import logging
 import platform
 import time
 from dataclasses import dataclass
+from typing import Callable
 
 import cv2
 import numpy as np
@@ -188,6 +189,9 @@ class CameraLoop:
         self._running = False
         self._opened_index: int | None = None  # 現在 cap が掴んでいる index
         self._switch_lock = asyncio.Lock()
+        # 検出があるたびに呼ばれるフック (BattleEngine の row 追従用)。
+        # 同期関数を想定。例外は内部で吸い込む。
+        self.on_detections: "Callable[[list[dict]], None] | None" = None
 
         # 永続化されたキャリブレーションがあれば復元
         saved = calibration_store.load()
@@ -358,16 +362,24 @@ class CameraLoop:
                 )
                 jpeg_b64 = await asyncio.to_thread(self._encode_jpeg, annotated)
 
+                detection_dicts = [d.to_dict() for d in detections]
                 await self.ws.broadcast(
                     {
                         "type": "aruco_frame",
                         "ts": time.time(),
                         "calibration_y_ratio": self.calibration_y_ratio,
                         "frame_jpeg_b64": jpeg_b64,
-                        "detections": [d.to_dict() for d in detections],
+                        "detections": detection_dicts,
                         "active_uuid": self.active_uuid,
                     }
                 )
+
+                # 戦闘中の列入れ替え検知用フック
+                if self.on_detections is not None:
+                    try:
+                        self.on_detections(detection_dicts)
+                    except Exception as e:  # noqa: BLE001
+                        logger.warning("on_detections hook failed: %s", e)
 
                 elapsed = time.perf_counter() - t0
                 await asyncio.sleep(max(0.0, interval - elapsed))

@@ -41,6 +41,10 @@ game_state = GameState()
 camera_loop = CameraLoop(ws_manager)
 battle_engine = BattleEngine(ws_broadcast=ws_manager.broadcast, game_state=game_state)
 
+# 戦闘中にアクスタが物理的に動かされたら、ArUco の検出結果を engine に流す
+# (row 変化があった時だけ即時 battle_state を broadcast、SPEC §4.6 警告攻撃)
+camera_loop.on_detections = battle_engine.schedule_row_sync
+
 
 async def _heartbeat_task() -> None:
     """Day 1-2 の疎通確認用に 2 秒ごとに簡易メッセージを流す。"""
