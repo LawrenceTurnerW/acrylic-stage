@@ -327,12 +327,13 @@ function AllyCard(props: {
   charsById: Map<number, Character>;
 }) {
   const a = props.ally;
+  const CARD_HEIGHT = 132;
   if (!a) {
     return (
       <div
         style={{
           flex: 1,
-          height: 116,
+          height: CARD_HEIGHT,
           borderRadius: 8,
           border: "1px dashed #3a2d6b",
           background: "rgba(255,255,255,0.02)",
@@ -352,12 +353,14 @@ function AllyCard(props: {
   const ready = a.gauge >= a.max_gauge;
   const attr = a.attribute ? props.attrs[a.attribute] : undefined;
   const unit = a.unit ? props.units[a.unit] : undefined;
+  // 左に大きく顔を出すキャラゲー風レイアウト。avatar は card 高さに合わせる。
+  const avatarSize = CARD_HEIGHT - 16; // padding 8 × 2 を引いた値
   return (
     <div
       style={{
         flex: 1,
-        height: 116,
-        padding: 10,
+        height: CARD_HEIGHT,
+        padding: 8,
         borderRadius: 8,
         background: ready
           ? `linear-gradient(135deg, ${accent}88, ${accent}33)`
@@ -369,61 +372,69 @@ function AllyCard(props: {
             ? "0 0 8px #ff7b72cc"
             : "none",
         display: "flex",
-        flexDirection: "column",
-        gap: 6,
+        flexDirection: "row",
+        gap: 10,
         opacity: a.downed ? 0.35 : 1,
         filter: a.downed ? "grayscale(0.7)" : "none",
         transition:
           "opacity 220ms, filter 220ms, box-shadow 240ms ease-in-out",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <CharacterAvatar
-          character={{
-            id: a.id,
-            aruco_marker_id: a.marker_id ?? 0,
-            personal_color: accent,
-            // Combatant 自体は cast_image_url を持たないので、静的キャラ定義から引く
-            cast_image_url:
-              a.marker_id != null
-                ? props.charsById.get(a.marker_id)?.cast_image_url ?? null
-                : null,
+      <CharacterAvatar
+        character={{
+          id: a.id,
+          aruco_marker_id: a.marker_id ?? 0,
+          personal_color: accent,
+          // Combatant 自体は cast_image_url を持たないので、静的キャラ定義から引く
+          cast_image_url:
+            a.marker_id != null
+              ? props.charsById.get(a.marker_id)?.cast_image_url ?? null
+              : null,
+        }}
+        size={avatarSize}
+        shape="rounded"
+        glow={false}
+      />
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          paddingTop: 2,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 700,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            letterSpacing: 0.5,
           }}
-          size={36}
-          shape="circle"
-          glow={false}
-        />
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {a.name}
-          </div>
-          <div style={{ fontSize: 10, opacity: 0.65 }}>
-            {unit?.icon} {attr?.icon} {a.role}
-            {a.condition?.icon ? ` ${a.condition.icon}` : ""}
-          </div>
+        >
+          {a.name}
         </div>
+        <div style={{ fontSize: 10, opacity: 0.7 }}>
+          {unit?.icon} {attr?.icon} {a.role}
+          {a.condition?.icon ? ` ${a.condition.icon}` : ""}
+        </div>
+        <Meter
+          label="HP"
+          value={a.tension}
+          max={a.max_tension}
+          color={pinch ? "#ff7b72" : "#ff95a4"}
+        />
+        <Meter
+          label={ready ? "▶必殺可" : "声援"}
+          value={a.gauge}
+          max={a.max_gauge}
+          color={ready ? "#ffd86b" : accent}
+        />
+        <StatusBadges effects={a.status_effects} dots={a.dots} />
       </div>
-      <Meter
-        label="HP"
-        value={a.tension}
-        max={a.max_tension}
-        color={pinch ? "#ff7b72" : "#ff95a4"}
-      />
-      <Meter
-        label={ready ? "▶必殺可" : "声援"}
-        value={a.gauge}
-        max={a.max_gauge}
-        color={ready ? "#ffd86b" : accent}
-      />
-      <StatusBadges effects={a.status_effects} dots={a.dots} />
     </div>
   );
 }
