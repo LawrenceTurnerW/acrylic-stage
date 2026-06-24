@@ -5,7 +5,12 @@ import { CalibrationScreen } from "./components/CalibrationScreen";
 import { PrepareScreen } from "./components/PrepareScreen";
 import { StageIntroOverlay } from "./components/StageIntroOverlay";
 import { useGameData } from "./hooks/useGameData";
-import { connectLiveWS, type ServerEvent, type WSStatus } from "./ws";
+import {
+  connectLiveWS,
+  type BattleStateSnapshot,
+  type ServerEvent,
+  type WSStatus,
+} from "./ws";
 
 type Screen = "title" | "calibration" | "prepare" | "battle";
 
@@ -22,6 +27,9 @@ export default function App() {
     { type: "aruco_frame" }
   > | null>(null);
   const [formation, setFormation] = useState<Formation>({ front: [], rear: [] });
+  const [battleState, setBattleState] = useState<BattleStateSnapshot | null>(
+    null,
+  );
   const [log, setLog] = useState<string[]>([]);
   const logRef = useRef<string[]>([]);
   // ステージ告知オーバーレイは初回 prepare 入場時に 1 度だけ出す。
@@ -54,7 +62,20 @@ export default function App() {
             setLatestFrame(e);
             break;
           case "battle_start":
-            appendLog(`battle_start front=${e.front} rear=${e.rear}`);
+            appendLog(`▶ battle_start front=${e.front} rear=${e.rear}`);
+            break;
+          case "battle_state": {
+            const { turn, finished, result, allies, enemies } = e;
+            setBattleState({ turn, finished, result, allies, enemies });
+            break;
+          }
+          case "battle_action":
+            if (e.message) appendLog(`T${("turn" in e ? e.turn : "?")}: ${e.message}`);
+            break;
+          case "battle_end":
+            appendLog(
+              `■ battle_end result=${e.result}${e.mvp_id ? ` MVP=${e.mvp_id}` : ""}`,
+            );
             break;
           case "camera_error":
             appendLog(`camera_error: ${e.message}`);
@@ -75,6 +96,7 @@ export default function App() {
 
   const handleReady = async (f: Formation) => {
     setFormation(f);
+    setBattleState(null); // 前回の戦闘 state をクリア
     try {
       const res = await fetch(`${API_BASE}/start_battle`, {
         method: "POST",
@@ -171,8 +193,16 @@ export default function App() {
             heartbeat={lastHeartbeat}
             log={log}
             formation={formation}
+            battleState={battleState}
             charsData={gameData.characters}
-            onReturnToPrepare={() => setScreen("prepare")}
+            onReturnToPrepare={async () => {
+              try {
+                await fetch(`${API_BASE}/reset`, { method: "POST" });
+              } catch (e) {
+                appendLog(`/reset failed: ${e}`);
+              }
+              setScreen("prepare");
+            }}
           />
         )}
       </main>

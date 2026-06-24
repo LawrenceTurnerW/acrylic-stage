@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from core.camera import CameraLoop, probe_cameras
 from core.state import GameState
 from core.ws_manager import WSManager
+from engine.battle import BattleEngine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,6 +39,7 @@ logger = logging.getLogger("acrylic")
 ws_manager = WSManager()
 game_state = GameState()
 camera_loop = CameraLoop(ws_manager)
+battle_engine = BattleEngine(ws_broadcast=ws_manager.broadcast, game_state=game_state)
 
 
 async def _heartbeat_task() -> None:
@@ -66,6 +68,7 @@ async def lifespan(app: FastAPI):
     finally:
         logger.info("stopping backend services")
         heartbeat.cancel()
+        await battle_engine.stop()
         await camera_loop.stop()
 
 
@@ -129,27 +132,21 @@ async def stage_endpoint() -> dict[str, Any]:
 
 @app.post("/start_battle")
 async def start_battle(req: StartBattleRequest) -> dict[str, Any]:
-    """編成を確定して battle phase に遷移。
-
-    Day 3 では受信内容を formation に記録し、battle_start を broadcast するのみ。
-    Day 4 以降で実際の戦闘ロジック(engine/battle.py)を起動する。
-    """
+    """編成を確定して BattleEngine を起動する。"""
     logger.info("start_battle: front=%s rear=%s", req.front, req.rear)
     game_state.phase = "battle"
     game_state.formation = {"front": req.front, "rear": req.rear}
     await ws_manager.broadcast(
-        {
-            "type": "battle_start",
-            "front": req.front,
-            "rear": req.rear,
-        }
+        {"type": "battle_start", "front": req.front, "rear": req.rear}
     )
-    return {"ok": True, "phase": game_state.phase}
+    result = await battle_engine.start({"front": req.front, "rear": req.rear})
+    return {"ok": True, "phase": game_state.phase, **result}
 
 
 @app.post("/reset")
 async def reset_to_prepare() -> dict[str, Any]:
-    """戦闘を抜けて編成画面に戻る用のスタブ。"""
+    """戦闘を停止して編成画面に戻る。"""
+    await battle_engine.stop()
     game_state.phase = "prepare"
     game_state.formation = {"front": [], "rear": []}
     return {"ok": True, "phase": game_state.phase}

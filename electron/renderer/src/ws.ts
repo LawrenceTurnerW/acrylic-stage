@@ -12,6 +12,16 @@ export type ServerEvent =
       frame_jpeg_b64: string;
       detections: ArucoDetection[];
       active_uuid: string | null;
+    }
+  | ({ type: "battle_state"; ts: number } & BattleStateSnapshot)
+  | ({ type: "battle_action"; ts: number } & BattleAction)
+  | {
+      type: "battle_end";
+      ts: number;
+      result: "win" | "lose" | null;
+      mvp_id: string | null;
+      turn: number;
+      message: string;
     };
 
 export type ArucoDetection = {
@@ -20,6 +30,70 @@ export type ArucoDetection = {
   cy: number;
   row: "front" | "rear";
 };
+
+export type Combatant = {
+  id: string;
+  name: string;
+  is_ally: boolean;
+  attack: number;
+  defense: number;
+  speed: number;
+  tension: number;
+  max_tension: number;
+  gauge: number;
+  max_gauge: number;
+  marker_id: number | null;
+  row: "front" | "rear";
+  unit: string | null;
+  attribute: string | null;
+  personal_color: string | null;
+  role: string | null;
+  position_preference: string | null;
+  condition: {
+    id: string;
+    display: string;
+    icon: string;
+  } | null;
+  ultimate: {
+    name: string;
+    type: string;
+    description: string;
+  } | null;
+  icon: string | null;
+  is_boss: boolean;
+  downed: boolean;
+};
+
+export type BattleStateSnapshot = {
+  turn: number;
+  finished: boolean;
+  result: "win" | "lose" | null;
+  allies: Combatant[];
+  enemies: Combatant[];
+};
+
+export type BattleAction =
+  | {
+      kind: "normal_attack";
+      actor_id: string;
+      actor_name: string;
+      actor_is_ally: boolean;
+      target_id: string;
+      target_name: string;
+      damage: number;
+      target_downed: boolean;
+      turn: number;
+      message: string;
+    }
+  | {
+      kind: "downed";
+      actor_id: string;
+      actor_name: string;
+      actor_is_ally: boolean;
+      turn: number;
+      message: string;
+    }
+  | { kind: "system"; message: string };
 
 export type WSStatus = "connecting" | "open" | "closed";
 
