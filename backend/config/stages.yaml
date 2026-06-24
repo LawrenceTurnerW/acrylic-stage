@@ -54,8 +54,10 @@ enemy_types:
   summer_slime:
     name: "サマースライム"
     icon: "🟢"
-    hp: 30
-    attack: 8
+    # バランス: 1 ターンキルされず数発耐える HP に。攻撃も少し上げて味方が
+    # 削れる(七海の回復が活きる)よう調整。
+    hp: 100
+    attack: 11
     speed: 8
     behavior:
       # 単体に弱攻撃。前列を集中して狙う傾向
@@ -63,12 +65,14 @@ enemy_types:
       attack_pattern:
         - kind: damage_single
           weight: 1.0  # 通常攻撃のみ
-  
+
   heat_golem:
     name: "ヒートゴーレム"
     icon: "🟠"
-    hp: 120
-    attack: 15
+    # バランス: 15-20 ターン戦を狙って HP 10 倍に。攻撃力も若干上げて
+    # 警告攻撃以外でも怖い存在に。全 7 種の必殺技が複数回見える長さを確保。
+    hp: 1200
+    attack: 18
     speed: 6
     behavior:
       target_strategy: prefer_front  # 単体狙う際は前列優先
