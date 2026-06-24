@@ -79,20 +79,19 @@ enemy_types:
           weight: 0.25  # 警告攻撃 25%
       
       # 警告攻撃の詳細(ボス固有)
+      # 後列狙撃 (rear_snipe) は物理操作上の都合で廃止。
+      # カメラ画角の都合で前列より後列の方が物理的に余裕があるため、
+      # 「警告 → 全員後列に避難」だけで対応できる前列爆撃のみに統一。
       warning_attack:
         probability_per_turn: 0.25  # 25%で発動
         warning_turns: 2            # 2ターン後に発動
         damage_base: 50             # 該当列に50固定ダメージ
-        safe_threshold: 1           # 対象列に1体以下ならセーフ(4体を片側に詰める負担を緩和)
+        safe_threshold: 1           # 対象列に1体以下ならセーフ
         variants:
           - kind: front_blast
             name: "前列爆撃"
             target_row: front
-            weight: 0.5
-          - kind: rear_snipe
-            name: "後列狙撃"
-            target_row: rear
-            weight: 0.5
+            weight: 1.0
         announcement:
           turn_minus_2: "⚠ 2ターン後:{variant_name}!"
           turn_minus_1: "⚠ 残り1ターン!{variant_name}が来る!"
