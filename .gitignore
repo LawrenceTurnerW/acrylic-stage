@@ -73,3 +73,6 @@ Thumbs.db
 config.local.yaml
 *.local.yaml
 calibration.local.json
+
+# ─── scripts/dev.sh のログ出力先 ───
+.dev/

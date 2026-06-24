@@ -78,28 +78,36 @@
 - Node.js 18+
 - カメラアクセス(macOS の場合、ターミナルアプリにカメラ権限を許可)
 
-### バックエンド
+### 初回セットアップ
 ```bash
+# backend
 cd backend
 python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn main:app --reload --host 127.0.0.1 --port 8000
+.venv/bin/pip install -r requirements.txt
+cd ..
+
+# frontend
+cd electron
+npm install
+cd ..
 ```
+
+### 開発時の起動(2回目以降)
+```bash
+./scripts/dev.sh
+```
+
+- 既存の uvicorn / vite / electron プロセスを kill してから起動
+- backend と frontend をバックグラウンドで上げて、ログを `.dev/` に出しつつ統合 tail
+- ターミナルで **Ctrl-C** すれば両方止まる
+- 強制停止だけしたい時は `./scripts/stop.sh`
 
 起動後、確認用エンドポイント:
 - `http://127.0.0.1:8000/health` → `{"ok": true}`
 - `http://127.0.0.1:8000/state` → 現在の game state
-- `ws://127.0.0.1:8000/ws/live` → heartbeat (2 秒間隔) + aruco_frame (5fps)
-
-### フロントエンド
-```bash
-cd electron
-npm install
-npm run dev
-```
-
-`npm run dev` で Vite (renderer の HMR) と Electron が並行起動する。タイトル画面 → 「キャリブレーション」タブでカメラ映像と前列ラインを確認。
+- `http://127.0.0.1:8000/characters` → 7キャラ + ユニット/属性/コンディション
+- `http://127.0.0.1:8000/stage` → 現在ステージ
+- `ws://127.0.0.1:8000/ws/live` → heartbeat + aruco_frame (5fps)
 
 ### macOS のカメラ権限について
 初回起動時にカメラ権限ダイアログが出る。ターミナル(または Claude Code を起動した親アプリ)に対して「カメラ」を許可すること。
