@@ -18,12 +18,15 @@ import type {
   ServerEvent,
   StatusEffect,
 } from "../ws";
+import { useMemo } from "react";
 import type {
   Attribute,
+  Character,
   CharactersResponse,
   RowId,
   Unit,
 } from "../types/character";
+import { CharacterAvatar } from "./CharacterAvatar";
 
 type Formation = { front: number[]; rear: number[] };
 
@@ -49,6 +52,15 @@ export function BattleScreen(props: {
   // 描画用に String キーで引きやすい辞書に。useGameData が来てなくても空 {} で動く。
   const attrs: Record<string, Attribute> = charsData?.attributes ?? {};
   const units: Record<string, Unit> = charsData?.units ?? {};
+  // Combatant は cast_image_url を持たないので、marker_id 経由で静的キャラ定義
+  // を引けるよう Map を作る (AllyCard 内で参照)
+  const charsById = useMemo(() => {
+    const m = new Map<number, Character>();
+    if (charsData) {
+      for (const c of charsData.characters) m.set(c.aruco_marker_id, c);
+    }
+    return m;
+  }, [charsData]);
 
   // battle_state がまだ届いていない時は formation だけで仮表示する
   // (start_battle → 最初の broadcast まで一瞬の窓)
@@ -125,12 +137,14 @@ export function BattleScreen(props: {
               allies={allies.filter((a) => a.row === "front")}
               attrs={attrs}
               units={units}
+              charsById={charsById}
             />
             <FormationVisual
               row="rear"
               allies={allies.filter((a) => a.row === "rear")}
               attrs={attrs}
               units={units}
+              charsById={charsById}
             />
           </>
         )}
@@ -273,6 +287,7 @@ function FormationVisual(props: {
   allies: Combatant[];
   attrs: Record<string, Attribute>;
   units: Record<string, Unit>;
+  charsById: Map<number, Character>;
 }) {
   const slots: (Combatant | null)[] = [
     props.allies[0] ?? null,
@@ -297,6 +312,7 @@ function FormationVisual(props: {
             ally={ally}
             attrs={props.attrs}
             units={props.units}
+            charsById={props.charsById}
           />
         ))}
       </div>
@@ -308,6 +324,7 @@ function AllyCard(props: {
   ally: Combatant | null;
   attrs: Record<string, Attribute>;
   units: Record<string, Unit>;
+  charsById: Map<number, Character>;
 }) {
   const a = props.ally;
   if (!a) {
@@ -361,23 +378,21 @@ function AllyCard(props: {
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "50%",
-            background: accent,
-            color: "#0f0f14",
-            fontWeight: 800,
-            fontSize: 13,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
+        <CharacterAvatar
+          character={{
+            id: a.id,
+            aruco_marker_id: a.marker_id ?? 0,
+            personal_color: accent,
+            // Combatant 自体は cast_image_url を持たないので、静的キャラ定義から引く
+            cast_image_url:
+              a.marker_id != null
+                ? props.charsById.get(a.marker_id)?.cast_image_url ?? null
+                : null,
           }}
-        >
-          {a.marker_id ?? "?"}
-        </div>
+          size={36}
+          shape="circle"
+          glow={false}
+        />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div
             style={{

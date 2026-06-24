@@ -73,6 +73,9 @@ export type Character = {
   ultimate: Ultimate;
   voice_style: string;
   condition?: Condition;
+  // /assets/characters/{id}.png の相対パス、ファイルが無い場合は null
+  // (frontend で API_BASE を prepend して使う、404 時はフォールバック表示)
+  cast_image_url?: string | null;
 };
 
 export type CharactersResponse = {

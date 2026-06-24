@@ -21,8 +21,11 @@ from typing import Any
 # が起動した親アプリ)に対して許可すること。
 os.environ.setdefault("OPENCV_AVFOUNDATION_SKIP_AUTH", "1")
 
+from pathlib import Path
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from core.camera import CameraLoop, probe_cameras
@@ -86,6 +89,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# キャラクター画像は backend/assets/ 配下に置いて /assets から配信。
+# ファイルは .gitignore で除外 (リポジトリには含めない方針 / README §キャラクター画像)。
+# scripts/download_character_images.sh で取得する。
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+
 
 class EquippedItem(BaseModel):
     kind: str
@@ -115,10 +125,28 @@ async def characters_endpoint() -> dict[str, Any]:
 
     レスポンスは Electron 側の編成画面・戦闘画面で参照する。
     再フェッチしてもコンディションは変わらない(プロセス再起動で再抽選)。
+
+    cast_image_url は /assets/characters/{id}.png の相対パス。フロントエンド
+    側で API_BASE を prepend して使う。ファイルが存在しない場合は 404 になる
+    ので、UI 側で onError フォールバックを用意すること。
     """
     cfg = game_state.characters_cfg
+    chars_dir = ASSETS_DIR / "characters"
+    characters = []
+    for c in game_state.characters_with_conditions():
+        image_path = chars_dir / f"{c['id']}.png"
+        characters.append(
+            {
+                **c,
+                "cast_image_url": (
+                    f"/assets/characters/{c['id']}.png"
+                    if image_path.exists()
+                    else None
+                ),
+            }
+        )
     return {
-        "characters": game_state.characters_with_conditions(),
+        "characters": characters,
         "units": cfg.get("units", {}),
         "attributes": cfg.get("attributes", {}),
         "stat_to_stars": cfg.get("stat_to_stars", {}),

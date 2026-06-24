@@ -23,6 +23,7 @@ import type {
   ItemInstance,
   ItemsCatalog,
 } from "../types/items";
+import { CharacterAvatar } from "./CharacterAvatar";
 import { CharacterIntroPanel } from "./CharacterIntroPanel";
 import { InventoryModal } from "./InventoryModal";
 
@@ -457,23 +458,7 @@ function FormationSlot(props: {
         padding: "0 10px",
       }}
     >
-      <div
-        style={{
-          width: 40,
-          height: 40,
-          borderRadius: "50%",
-          background: accent,
-          color: "#0f0f14",
-          fontWeight: 800,
-          fontSize: 16,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        {c.aruco_marker_id}
-      </div>
+      <CharacterAvatar character={c} size={56} shape="circle" />
       <div style={{ minWidth: 0, flex: 1 }}>
         <div
           style={{

@@ -6,6 +6,7 @@
 // マーカー ID を載せたフォールバック表示にしている (SPEC §3.3 / README)。
 
 import type { Attribute, Character, Unit } from "../types/character";
+import { CharacterAvatar } from "./CharacterAvatar";
 
 const POS_LABEL: Record<string, string> = {
   front: "前列",
@@ -36,9 +37,9 @@ export function CharacterIntroPanel(props: {
         gap: 12,
       }}
     >
-      {/* ヘッダー: カラーチップ + 名前 + ユニット/属性/ロール */}
+      {/* ヘッダー: アバター + 名前 + ユニット/属性/ロール */}
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <ColorChip color={accent} markerId={c.aruco_marker_id} />
+        <CharacterAvatar character={c} size={52} shape="rounded" />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div
             style={{
@@ -121,31 +122,6 @@ export function CharacterIntroPanel(props: {
           {c.ultimate.description}
         </div>
       </div>
-    </div>
-  );
-}
-
-function ColorChip(props: { color: string; markerId: number }) {
-  return (
-    <div
-      style={{
-        width: 52,
-        height: 52,
-        borderRadius: 10,
-        background: props.color,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "#0f0f14",
-        fontWeight: 800,
-        fontSize: 22,
-        letterSpacing: 1,
-        flexShrink: 0,
-        boxShadow: `0 0 12px ${props.color}66`,
-      }}
-      title={`ArUco marker id ${props.markerId}`}
-    >
-      {props.markerId}
     </div>
   );
 }
