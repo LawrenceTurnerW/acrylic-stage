@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import type { CharactersResponse, StageResponse } from "../types/character";
+import type { ItemsCatalog } from "../types/items";
 
 const API_BASE = "http://127.0.0.1:8000";
 
 export type GameData = {
   characters: CharactersResponse | null;
   stage: StageResponse | null;
+  items: ItemsCatalog | null;
   error: string | null;
 };
 
@@ -15,26 +17,30 @@ export type GameData = {
 export function useGameData(): GameData {
   const [characters, setCharacters] = useState<CharactersResponse | null>(null);
   const [stage, setStage] = useState<StageResponse | null>(null);
+  const [items, setItems] = useState<ItemsCatalog | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [charsRes, stageRes] = await Promise.all([
+        const [charsRes, stageRes, itemsRes] = await Promise.all([
           fetch(`${API_BASE}/characters`),
           fetch(`${API_BASE}/stage`),
+          fetch(`${API_BASE}/items`),
         ]);
-        if (!charsRes.ok || !stageRes.ok) {
+        if (!charsRes.ok || !stageRes.ok || !itemsRes.ok) {
           throw new Error(
-            `fetch failed: characters=${charsRes.status} stage=${stageRes.status}`,
+            `fetch failed: characters=${charsRes.status} stage=${stageRes.status} items=${itemsRes.status}`,
           );
         }
         const chars = (await charsRes.json()) as CharactersResponse;
         const st = (await stageRes.json()) as StageResponse;
+        const it = (await itemsRes.json()) as ItemsCatalog;
         if (!cancelled) {
           setCharacters(chars);
           setStage(st);
+          setItems(it);
         }
       } catch (e) {
         if (!cancelled) setError(String(e));
@@ -45,5 +51,5 @@ export function useGameData(): GameData {
     };
   }, []);
 
-  return { characters, stage, error };
+  return { characters, stage, items, error };
 }

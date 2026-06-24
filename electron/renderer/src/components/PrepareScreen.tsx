@@ -11,14 +11,20 @@
 // クリックで入れ替える機能は持たない。ArUco の Y 座標 + キャリブレーション
 // しきい値が真実(SPEC §3.5 / §4.2)。
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { ServerEvent } from "../ws";
 import type {
   Character,
   CharactersResponse,
   StageResponse,
 } from "../types/character";
+import type {
+  EquipmentMap,
+  ItemInstance,
+  ItemsCatalog,
+} from "../types/items";
 import { CharacterIntroPanel } from "./CharacterIntroPanel";
+import { InventoryModal } from "./InventoryModal";
 
 type ArucoFrame = Extract<ServerEvent, { type: "aruco_frame" }>;
 type Detection = ArucoFrame["detections"][number];
@@ -27,9 +33,26 @@ export function PrepareScreen(props: {
   frame: ArucoFrame | null;
   charsData: CharactersResponse;
   stage: StageResponse | null;
+  itemsCatalog: ItemsCatalog | null;
+  inventory: ItemInstance[];
+  equipment: EquipmentMap;
+  onEquip: (characterId: string, instanceId: string) => void;
+  onUnequip: (characterId: string) => void;
   onReady: (formation: { front: number[]; rear: number[] }) => void;
 }) {
-  const { frame, charsData, stage, onReady } = props;
+  const {
+    frame,
+    charsData,
+    stage,
+    itemsCatalog,
+    inventory,
+    equipment,
+    onEquip,
+    onUnequip,
+    onReady,
+  } = props;
+  // 装備モーダル: どのキャラの編集中か
+  const [editingChar, setEditingChar] = useState<string | null>(null);
 
   // marker_id → Character 索引
   const charsById = useMemo(() => {
@@ -190,19 +213,122 @@ export function PrepareScreen(props: {
             {detections.map((d) => {
               const c = charsById.get(d.marker_id);
               if (!c) return null;
+              const equippedInstanceId = equipment[c.id];
+              const equippedItem = equippedInstanceId
+                ? inventory.find(
+                    (it) => it.instance_id === equippedInstanceId,
+                  ) ?? null
+                : null;
               return (
-                <CharacterIntroPanel
+                <div
                   key={d.marker_id}
-                  character={c}
-                  unit={charsData.units[c.unit]}
-                  attribute={charsData.attributes[c.attribute]}
-                />
+                  style={{ display: "flex", flexDirection: "column", gap: 6 }}
+                >
+                  <CharacterIntroPanel
+                    character={c}
+                    unit={charsData.units[c.unit]}
+                    attribute={charsData.attributes[c.attribute]}
+                  />
+                  {itemsCatalog && (
+                    <EquipSlot
+                      catalog={itemsCatalog}
+                      item={equippedItem}
+                      onClick={() => setEditingChar(c.id)}
+                    />
+                  )}
+                </div>
               );
             })}
           </div>
         )}
       </section>
+
+      {editingChar && itemsCatalog && (
+        <InventoryModal
+          characterId={editingChar}
+          characterName={
+            charsData.characters.find((c) => c.id === editingChar)?.name ??
+            editingChar
+          }
+          catalog={itemsCatalog}
+          inventory={inventory}
+          equipment={equipment}
+          charNamesById={Object.fromEntries(
+            charsData.characters.map((c) => [c.id, c.name]),
+          )}
+          onEquip={(instanceId) => onEquip(editingChar, instanceId)}
+          onUnequip={() => onUnequip(editingChar)}
+          onClose={() => setEditingChar(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function EquipSlot(props: {
+  catalog: ItemsCatalog;
+  item: ItemInstance | null;
+  onClick: () => void;
+}) {
+  const RARITY_COLORS = { N: "#aaa", R: "#7eb6ff", SR: "#ffd86b" };
+  if (!props.item) {
+    return (
+      <button
+        onClick={props.onClick}
+        style={{
+          background: "rgba(255,255,255,0.03)",
+          border: "1px dashed #3a2d6b",
+          borderRadius: 8,
+          padding: "6px 10px",
+          color: "inherit",
+          opacity: 0.6,
+          fontSize: 11,
+          cursor: "pointer",
+          textAlign: "left",
+        }}
+      >
+        + アクセサリーを装備
+      </button>
+    );
+  }
+  const def = props.catalog.items[props.item.kind];
+  const color = RARITY_COLORS[props.item.rarity];
+  const rarityDef = def.rarities[props.item.rarity];
+  return (
+    <button
+      onClick={props.onClick}
+      style={{
+        background: `${color}22`,
+        border: `1px solid ${color}`,
+        borderRadius: 8,
+        padding: "6px 10px",
+        color: "inherit",
+        fontSize: 11,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        textAlign: "left",
+      }}
+    >
+      <span style={{ fontSize: 16 }}>{def.icon}</span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span
+          style={{
+            color,
+            fontWeight: 700,
+            marginRight: 6,
+            fontSize: 10,
+            letterSpacing: 1,
+          }}
+        >
+          {props.item.rarity}
+        </span>
+        {def.name}
+        <span style={{ opacity: 0.7, marginLeft: 6 }}>+{rarityDef.value}</span>
+      </span>
+      <span style={{ opacity: 0.5 }}>変更</span>
+    </button>
   );
 }
 

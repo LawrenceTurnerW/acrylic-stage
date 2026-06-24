@@ -3,6 +3,7 @@ import { TitleScreen } from "./components/TitleScreen";
 import { BattleScreen } from "./components/BattleScreen";
 import { CalibrationScreen } from "./components/CalibrationScreen";
 import { PrepareScreen } from "./components/PrepareScreen";
+import { ItemDropFlash } from "./components/ItemDropFlash";
 import { StageIntroOverlay } from "./components/StageIntroOverlay";
 import {
   UltimateFlash,
@@ -10,6 +11,8 @@ import {
 } from "./components/UltimateFlash";
 import { WarningBanner, WarningFlash } from "./components/WarningOverlay";
 import { useGameData } from "./hooks/useGameData";
+import { rollDrop, useInventory } from "./hooks/useInventory";
+import type { ItemInstance } from "./types/items";
 import {
   connectLiveWS,
   type BattleStateSnapshot,
@@ -85,8 +88,16 @@ export default function App() {
     mvp_id: string | null;
     turn: number;
   } | null>(null);
+  // 勝利時にドロップしたアイテムを 1 件保持して flash 表示
+  const [dropItem, setDropItem] = useState<ItemInstance | null>(null);
 
   const gameData = useGameData();
+  const inv = useInventory();
+  // inv も WS クロージャから常に最新を参照したいので ref で併走
+  const invRef = useRef(inv);
+  useEffect(() => {
+    invRef.current = inv;
+  }, [inv]);
   // gameData は WS のクロージャから常に最新を参照したいので ref を併走させる
   const gameDataRef = useRef(gameData);
   useEffect(() => {
@@ -190,7 +201,7 @@ export default function App() {
                 mvp_id: e.mvp_id,
                 turn: e.turn,
               });
-              // 図鑑に記録(localStorage)。タイトル画面で履歴を見せる
+              // 図鑑に記録(localStorage)
               try {
                 const prev = loadDexicon();
                 const entry: DexiconEntry = {
@@ -207,6 +218,18 @@ export default function App() {
                 );
               } catch (err) {
                 console.warn("dexicon save failed", err);
+              }
+              // 勝利時はアクセサリーをドロップ
+              if (e.result === "win" && gameDataRef.current.items) {
+                const dropCount =
+                  gameDataRef.current.items.drop_on_win ?? 1;
+                for (let i = 0; i < dropCount; i++) {
+                  const item = rollDrop(gameDataRef.current.items);
+                  if (item) {
+                    invRef.current.addItem(item);
+                    if (i === 0) setDropItem(item);
+                  }
+                }
               }
             }
             break;
@@ -235,11 +258,13 @@ export default function App() {
     setWarning(null);
     setWarningFlash(null);
     setUltimateQueue([]);
+    setDropItem(null);
+    const equipment = inv.buildEquipmentPayload();
     try {
       const res = await fetch(`${API_BASE}/start_battle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(f),
+        body: JSON.stringify({ ...f, equipment: equipment ?? {} }),
       });
       if (!res.ok) {
         appendLog(`start_battle returned ${res.status}; staying on prepare`);
@@ -321,6 +346,11 @@ export default function App() {
               frame={latestFrame}
               charsData={gameData.characters}
               stage={gameData.stage}
+              itemsCatalog={gameData.items}
+              inventory={inv.inventory}
+              equipment={inv.equipment}
+              onEquip={inv.equip}
+              onUnequip={inv.unequip}
               onReady={handleReady}
             />
           ) : (
@@ -370,6 +400,13 @@ export default function App() {
           message={warningFlash.message}
           variant_name={warningFlash.variant_name}
           onDone={() => setWarningFlash(null)}
+        />
+      )}
+      {dropItem && gameData.items && (
+        <ItemDropFlash
+          item={dropItem}
+          def={gameData.items.items[dropItem.kind]}
+          onDone={() => setDropItem(null)}
         />
       )}
     </div>
