@@ -27,6 +27,9 @@ import type {
   Unit,
 } from "../types/character";
 import { CharacterAvatar } from "./CharacterAvatar";
+import { DamageOverlay } from "./DamageOverlay";
+
+type DamageMap = Record<string, { damage: number; seq: number }>;
 
 type Formation = { front: number[]; rear: number[] };
 
@@ -37,6 +40,7 @@ export function BattleScreen(props: {
   battleState: BattleStateSnapshot | null;
   battleEnd: { result: "win" | "lose"; mvp_id: string | null; turn: number } | null;
   charsData: CharactersResponse | null;
+  damageBy: DamageMap;
   onReturnToPrepare: () => void;
 }) {
   const {
@@ -46,6 +50,7 @@ export function BattleScreen(props: {
     battleState,
     battleEnd,
     charsData,
+    damageBy,
     onReturnToPrepare,
   } = props;
 
@@ -131,13 +136,14 @@ export function BattleScreen(props: {
           <EmptyHint />
         ) : (
           <>
-            <EnemyArea enemies={enemies} />
+            <EnemyArea enemies={enemies} damageBy={damageBy} />
             <FormationVisual
               row="front"
               allies={allies.filter((a) => a.row === "front")}
               attrs={attrs}
               units={units}
               charsById={charsById}
+              damageBy={damageBy}
             />
             <FormationVisual
               row="rear"
@@ -145,6 +151,7 @@ export function BattleScreen(props: {
               attrs={attrs}
               units={units}
               charsById={charsById}
+              damageBy={damageBy}
             />
           </>
         )}
@@ -220,7 +227,7 @@ export function BattleScreen(props: {
   );
 }
 
-function EnemyArea(props: { enemies: Combatant[] }) {
+function EnemyArea(props: { enemies: Combatant[]; damageBy: DamageMap }) {
   if (props.enemies.length === 0) {
     return (
       <div style={{ fontSize: 11, opacity: 0.5 }}>(敵情報待機中…)</div>
@@ -240,14 +247,21 @@ function EnemyArea(props: { enemies: Combatant[] }) {
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {props.enemies.map((e) => (
-          <EnemyCard key={e.id} enemy={e} />
+          <EnemyCard
+            key={e.id}
+            enemy={e}
+            recentDamage={props.damageBy[e.id] ?? null}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function EnemyCard(props: { enemy: Combatant }) {
+function EnemyCard(props: {
+  enemy: Combatant;
+  recentDamage: { damage: number; seq: number } | null;
+}) {
   const e = props.enemy;
   return (
     <div
@@ -256,6 +270,7 @@ function EnemyCard(props: { enemy: Combatant }) {
         minWidth: 110,
         padding: 10,
         borderRadius: 8,
+        position: "relative", // damage popup の基準
         background: e.is_boss
           ? "linear-gradient(135deg, #f0a77433, #f0a77410)"
           : "rgba(255,255,255,0.04)",
@@ -278,6 +293,7 @@ function EnemyCard(props: { enemy: Combatant }) {
       {e.downed && (
         <div style={{ fontSize: 10, opacity: 0.7, marginTop: 4 }}>撃破</div>
       )}
+      <DamageOverlay recentDamage={props.recentDamage} />
     </div>
   );
 }
@@ -288,6 +304,7 @@ function FormationVisual(props: {
   attrs: Record<string, Attribute>;
   units: Record<string, Unit>;
   charsById: Map<number, Character>;
+  damageBy: DamageMap;
 }) {
   const slots: (Combatant | null)[] = [
     props.allies[0] ?? null,
@@ -308,11 +325,14 @@ function FormationVisual(props: {
       <div style={{ display: "flex", gap: 8 }}>
         {slots.map((ally, i) => (
           <AllyCard
-            key={ally?.id ?? `empty-${props.row}-${i}`}
+            // key を `<id>-<row>` にして列移動で必ず再マウント → fade-in で
+            // 視覚的に「移動した」ことが分かるようにする
+            key={ally ? `${ally.id}-${props.row}` : `empty-${props.row}-${i}`}
             ally={ally}
             attrs={props.attrs}
             units={props.units}
             charsById={props.charsById}
+            recentDamage={ally ? props.damageBy[ally.id] ?? null : null}
           />
         ))}
       </div>
@@ -325,6 +345,7 @@ function AllyCard(props: {
   attrs: Record<string, Attribute>;
   units: Record<string, Unit>;
   charsById: Map<number, Character>;
+  recentDamage: { damage: number; seq: number } | null;
 }) {
   const a = props.ally;
   const CARD_HEIGHT = 132;
@@ -357,11 +378,13 @@ function AllyCard(props: {
   const avatarSize = CARD_HEIGHT - 16; // padding 8 × 2 を引いた値
   return (
     <div
+      className="fade-in"
       style={{
         flex: 1,
         height: CARD_HEIGHT,
         padding: 8,
         borderRadius: 8,
+        position: "relative", // damage popup の基準
         background: ready
           ? `linear-gradient(135deg, ${accent}88, ${accent}33)`
           : `linear-gradient(135deg, ${accent}33, ${accent}05)`,
@@ -435,6 +458,7 @@ function AllyCard(props: {
         />
         <StatusBadges effects={a.status_effects} dots={a.dots} />
       </div>
+      <DamageOverlay recentDamage={props.recentDamage} />
     </div>
   );
 }

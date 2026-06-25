@@ -90,6 +90,17 @@ export default function App() {
   } | null>(null);
   // 勝利時にドロップしたアイテムを 1 件保持して flash 表示
   const [dropItem, setDropItem] = useState<ItemInstance | null>(null);
+  // combatant_id ごとの最新被弾ダメージ。seq でアニメ発火制御
+  const [damageBy, setDamageBy] = useState<
+    Record<string, { damage: number; seq: number }>
+  >({});
+  const damageSeqRef = useRef(0);
+  const recordDamage = (combatantId: string, damage: number) => {
+    if (damage <= 0) return;
+    damageSeqRef.current += 1;
+    const seq = damageSeqRef.current;
+    setDamageBy((d) => ({ ...d, [combatantId]: { damage, seq } }));
+  };
 
   const gameData = useGameData();
   const inv = useInventory();
@@ -136,6 +147,16 @@ export default function App() {
           }
           case "battle_action": {
             if (e.message) appendLog(`T${("turn" in e ? e.turn : "?")}: ${e.message}`);
+            // ダメージポップアップ用に被弾を記録
+            if (e.kind === "normal_attack" && e.damage > 0) {
+              recordDamage(e.target_id, e.damage);
+            } else if (e.kind === "dot_tick" && e.damage > 0) {
+              recordDamage(e.actor_id, e.damage);
+            } else if (e.kind === "warning_fire") {
+              for (const v of e.victims) {
+                recordDamage(v.ally_id, v.damage);
+              }
+            }
             // 警告攻撃の状態管理
             if (e.kind === "warning_announce") {
               setWarning({
@@ -259,6 +280,7 @@ export default function App() {
     setWarningFlash(null);
     setUltimateQueue([]);
     setDropItem(null);
+    setDamageBy({});
     const equipment = inv.buildEquipmentPayload();
     try {
       const res = await fetch(`${API_BASE}/start_battle`, {
@@ -364,6 +386,7 @@ export default function App() {
             battleState={battleState}
             battleEnd={battleEnd}
             charsData={gameData.characters}
+            damageBy={damageBy}
             onReturnToPrepare={async () => {
               try {
                 await fetch(`${API_BASE}/reset`, { method: "POST" });

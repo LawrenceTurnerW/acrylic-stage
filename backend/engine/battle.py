@@ -109,18 +109,18 @@ class BattleEngine:
             "enemies": [c.to_dict() for c in self.enemies],
         }
 
-    def update_ally_rows(self, detections: list[dict[str, Any]]) -> bool:
-        """ArUco 検出結果に基づいて味方の row (front/rear) を上書きする。
+    def update_ally_rows(
+        self, detections: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """ArUco 検出結果に基づいて味方の row を上書き。変更履歴を返す。
 
-        戦闘中にアクスタを物理的に動かしたら反映させるためのフック。
-        変更があったら True を返す。row が変わったら row_changed イベントを
-        broadcast して UI 側でカード移動アニメを走らせる(broadcast は呼び出し
-        側のタスクで async にスケジュールする)。
+        戻り値: 変更があった味方の {id, name, old_row, new_row} のリスト。
+        変更が無ければ空リスト。
         """
         if self.finished or not self._running:
-            return False
+            return []
         by_marker = {int(d["marker_id"]): d for d in detections}
-        changed = False
+        changes: list[dict[str, Any]] = []
         for ally in self.allies:
             if ally.marker_id is None or ally.downed:
                 continue
@@ -131,17 +131,25 @@ class BattleEngine:
             if new_row and new_row != ally.row:
                 old = ally.row
                 ally.row = new_row
-                changed = True
+                changes.append(
+                    {
+                        "id": ally.id,
+                        "name": ally.name,
+                        "old_row": old,
+                        "new_row": new_row,
+                    }
+                )
                 logger.info(
                     "row changed: %s %s -> %s", ally.name, old, new_row
                 )
-        return changed
+        return changes
 
     def schedule_row_sync(self, detections: list[dict[str, Any]]) -> None:
         """同期的に呼ばれる camera hook から非同期 broadcast に橋渡し。
 
         ループが回っていない時 (idle / battle 終了済み) は何もしない。
         row 変化があった時のみ battle_state を即時 broadcast する。
+        併せて row_changed の battle_action を broadcast してログに残す。
         """
         if self.finished or not self._running:
             return
@@ -149,11 +157,29 @@ class BattleEngine:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return  # event loop が無いコンテキストでは何もしない
-        if not self.update_ally_rows(detections):
+        changes = self.update_ally_rows(detections)
+        if not changes:
             return
-        # broadcast は eager にやる。これにより警告攻撃中の row 変更が
-        # 次ターンを待たず UI に伝わる。
-        loop.create_task(self._broadcast_state())
+
+        async def _emit() -> None:
+            for ch in changes:
+                label = "前列" if ch["new_row"] == "front" else "後列"
+                await self._broadcast_action(
+                    {
+                        "kind": "row_changed",
+                        "actor_id": ch["id"],
+                        "actor_name": ch["name"],
+                        "actor_is_ally": True,
+                        "old_row": ch["old_row"],
+                        "new_row": ch["new_row"],
+                        "turn": self.turn,
+                        "message": f"{ch['name']} が {label}へ移動",
+                    }
+                )
+            # 次ターンを待たず UI に新 row を反映
+            await self._broadcast_state()
+
+        loop.create_task(_emit())
 
     # -------- 内部: セットアップ --------
 

@@ -147,6 +147,16 @@ export type BattleAction =
       message: string;
     }
   | {
+      kind: "row_changed";
+      actor_id: string;
+      actor_name: string;
+      actor_is_ally: true;
+      old_row: "front" | "rear";
+      new_row: "front" | "rear";
+      turn: number;
+      message: string;
+    }
+  | {
       kind: "warning_announce";
       actor_id: string;
       actor_name: string;

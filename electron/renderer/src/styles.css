@@ -165,3 +165,61 @@ button {
 .warning-flash {
   animation: warning-flash-anim 900ms ease-out forwards;
 }
+
+@keyframes damage-flash {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.damage-flash-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 70, 70, 0.55);
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 5;
+  animation: damage-flash 380ms ease-out forwards;
+}
+
+@keyframes damage-popup-anim {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(0) scale(0.6);
+  }
+  18% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-12px) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-56px) scale(1);
+  }
+}
+
+.damage-popup {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  color: #ffefef;
+  font-weight: 900;
+  font-size: 28px;
+  font-family:
+    "Trebuchet MS",
+    -apple-system,
+    sans-serif;
+  text-shadow:
+    0 0 8px rgba(0, 0, 0, 0.85),
+    0 0 16px rgba(255, 60, 60, 0.6),
+    0 2px 0 rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 6;
+  letter-spacing: 1px;
+  animation: damage-popup-anim 1400ms ease-out forwards;
+}
