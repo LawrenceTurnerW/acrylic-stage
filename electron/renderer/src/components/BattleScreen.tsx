@@ -28,8 +28,10 @@ import type {
 } from "../types/character";
 import { CharacterAvatar } from "./CharacterAvatar";
 import { DamageOverlay } from "./DamageOverlay";
+import { SpeechBubble } from "./SpeechBubble";
 
 type DamageMap = Record<string, { damage: number; seq: number }>;
+type SpeechMap = Record<string, { text: string; seq: number }>;
 
 type Formation = { front: number[]; rear: number[] };
 
@@ -41,6 +43,7 @@ export function BattleScreen(props: {
   battleEnd: { result: "win" | "lose"; mvp_id: string | null; turn: number } | null;
   charsData: CharactersResponse | null;
   damageBy: DamageMap;
+  speechBy: SpeechMap;
   onReturnToPrepare: () => void;
 }) {
   const {
@@ -51,6 +54,7 @@ export function BattleScreen(props: {
     battleEnd,
     charsData,
     damageBy,
+    speechBy,
     onReturnToPrepare,
   } = props;
 
@@ -144,6 +148,7 @@ export function BattleScreen(props: {
               units={units}
               charsById={charsById}
               damageBy={damageBy}
+              speechBy={speechBy}
             />
             <FormationVisual
               row="rear"
@@ -152,6 +157,7 @@ export function BattleScreen(props: {
               units={units}
               charsById={charsById}
               damageBy={damageBy}
+              speechBy={speechBy}
             />
           </>
         )}
@@ -305,6 +311,7 @@ function FormationVisual(props: {
   units: Record<string, Unit>;
   charsById: Map<number, Character>;
   damageBy: DamageMap;
+  speechBy: SpeechMap;
 }) {
   const slots: (Combatant | null)[] = [
     props.allies[0] ?? null,
@@ -333,6 +340,7 @@ function FormationVisual(props: {
             units={props.units}
             charsById={props.charsById}
             recentDamage={ally ? props.damageBy[ally.id] ?? null : null}
+            recentSpeech={ally ? props.speechBy[ally.id] ?? null : null}
           />
         ))}
       </div>
@@ -346,6 +354,7 @@ function AllyCard(props: {
   units: Record<string, Unit>;
   charsById: Map<number, Character>;
   recentDamage: { damage: number; seq: number } | null;
+  recentSpeech: { text: string; seq: number } | null;
 }) {
   const a = props.ally;
   const CARD_HEIGHT = 132;
@@ -459,6 +468,7 @@ function AllyCard(props: {
         <StatusBadges effects={a.status_effects} dots={a.dots} />
       </div>
       <DamageOverlay recentDamage={props.recentDamage} />
+      <SpeechBubble recentSpeech={props.recentSpeech} />
     </div>
   );
 }

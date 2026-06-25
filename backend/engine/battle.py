@@ -534,7 +534,7 @@ class BattleEngine:
                 # 倒れた味方の broadcast
                 for v in victims:
                     if v["downed"]:
-                        downed_msg = pick_dialogue(
+                        downed_speech = pick_dialogue(
                             self.game_state.dialogue_cfg, v["ally_id"], "downed"
                         )
                         await self._broadcast_action(
@@ -544,7 +544,9 @@ class BattleEngine:
                                 "actor_name": v["ally_name"],
                                 "actor_is_ally": True,
                                 "turn": self.turn,
-                                "message": downed_msg or f"{v['ally_name']} ダウン...",
+                                "message": downed_speech
+                                or f"{v['ally_name']} ダウン...",
+                                "speech": downed_speech,
                             }
                         )
 
@@ -646,7 +648,16 @@ class BattleEngine:
                 int(round(hit_gain * cond_mult * target.gauge_rate_mult))
             )
 
-        message = self._compose_message(actor, target, actual)
+        speech = ""
+        if actor.is_ally:
+            speech = pick_dialogue(
+                self.game_state.dialogue_cfg, actor.id, "normal_attack"
+            )
+        message = (
+            f"{actor.name}「{speech}」→ {target.name} に {actual}"
+            if speech
+            else f"{actor.name} の攻撃!{target.name} に {actual}"
+        )
 
         await self._broadcast_action(
             {
@@ -660,14 +671,24 @@ class BattleEngine:
                 "target_downed": target.downed,
                 "turn": self.turn,
                 "message": message,
+                "speech": speech,
             }
         )
 
         if target.downed:
-            downed_msg = (
+            downed_speech = (
                 pick_dialogue(self.game_state.dialogue_cfg, target.id, "downed")
                 if target.is_ally
-                else f"{target.name} を撃破!"
+                else ""
+            )
+            downed_msg = (
+                downed_speech
+                if downed_speech
+                else (
+                    f"{target.name} ダウン..."
+                    if target.is_ally
+                    else f"{target.name} を撃破!"
+                )
             )
             await self._broadcast_action(
                 {
@@ -676,7 +697,8 @@ class BattleEngine:
                     "actor_name": target.name,
                     "actor_is_ally": target.is_ally,
                     "turn": self.turn,
-                    "message": downed_msg or f"{target.name} ダウン...",
+                    "message": downed_msg,
+                    "speech": downed_speech,
                 }
             )
 
@@ -714,6 +736,7 @@ class BattleEngine:
                 "actor_name": actor.name,
                 "actor_is_ally": True,
                 "turn": self.turn,
+                "speech": line,
                 **result.to_dict(),
             }
         )
@@ -729,20 +752,9 @@ class BattleEngine:
                         "actor_is_ally": False,
                         "turn": self.turn,
                         "message": f"{e.name} を撃破!",
+                        "speech": "",
                     }
                 )
-
-    def _compose_message(
-        self, actor: Combatant, target: Combatant, damage: int
-    ) -> str:
-        if actor.is_ally:
-            line = pick_dialogue(
-                self.game_state.dialogue_cfg, actor.id, "normal_attack"
-            )
-            if line:
-                return f"{actor.name}「{line}」→ {target.name} に {damage}"
-            return f"{actor.name} の攻撃!{target.name} に {damage}"
-        return f"{actor.name} の攻撃!{target.name} に {damage}"
 
     # -------- 内部: 終了判定 / broadcast --------
 

@@ -102,6 +102,18 @@ export default function App() {
     setDamageBy((d) => ({ ...d, [combatantId]: { damage, seq } }));
   };
 
+  // combatant_id ごとの最新セリフ。seq でアニメ再生制御
+  const [speechBy, setSpeechBy] = useState<
+    Record<string, { text: string; seq: number }>
+  >({});
+  const speechSeqRef = useRef(0);
+  const recordSpeech = (combatantId: string, text: string) => {
+    if (!text) return;
+    speechSeqRef.current += 1;
+    const seq = speechSeqRef.current;
+    setSpeechBy((d) => ({ ...d, [combatantId]: { text, seq } }));
+  };
+
   const gameData = useGameData();
   const inv = useInventory();
   // inv も WS クロージャから常に最新を参照したいので ref で併走
@@ -156,6 +168,17 @@ export default function App() {
               for (const v of e.victims) {
                 recordDamage(v.ally_id, v.damage);
               }
+            }
+            // 吹き出し用にセリフを記録 (味方のみ、空文字は無視)
+            if (
+              (e.kind === "normal_attack" ||
+                e.kind === "ultimate" ||
+                e.kind === "downed") &&
+              "speech" in e &&
+              e.speech &&
+              e.actor_id
+            ) {
+              recordSpeech(e.actor_id, e.speech);
             }
             // 警告攻撃の状態管理
             if (e.kind === "warning_announce") {
@@ -281,6 +304,7 @@ export default function App() {
     setUltimateQueue([]);
     setDropItem(null);
     setDamageBy({});
+    setSpeechBy({});
     const equipment = inv.buildEquipmentPayload();
     try {
       const res = await fetch(`${API_BASE}/start_battle`, {
@@ -387,6 +411,7 @@ export default function App() {
             battleEnd={battleEnd}
             charsData={gameData.characters}
             damageBy={damageBy}
+            speechBy={speechBy}
             onReturnToPrepare={async () => {
               try {
                 await fetch(`${API_BASE}/reset`, { method: "POST" });

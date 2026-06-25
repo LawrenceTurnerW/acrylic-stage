@@ -99,6 +99,7 @@ export type BattleAction =
       target_downed: boolean;
       turn: number;
       message: string;
+      speech?: string;
     }
   | {
       kind: "ultimate";
@@ -118,6 +119,7 @@ export type BattleAction =
       dot_applied: string[];
       turn: number;
       message: string;
+      speech?: string;
     }
   | {
       kind: "dot_tick";
@@ -145,6 +147,7 @@ export type BattleAction =
       actor_is_ally: boolean;
       turn: number;
       message: string;
+      speech?: string;
     }
   | {
       kind: "row_changed";
