@@ -412,6 +412,7 @@ export default function App() {
             charsData={gameData.characters}
             damageBy={damageBy}
             speechBy={speechBy}
+            latestFrame={latestFrame}
             onReturnToPrepare={async () => {
               try {
                 await fetch(`${API_BASE}/reset`, { method: "POST" });
