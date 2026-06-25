@@ -44,7 +44,6 @@ export function BattleScreen(props: {
   charsData: CharactersResponse | null;
   damageBy: DamageMap;
   speechBy: SpeechMap;
-  latestFrame: Extract<ServerEvent, { type: "aruco_frame" }> | null;
   onReturnToPrepare: () => void;
 }) {
   const {
@@ -56,7 +55,6 @@ export function BattleScreen(props: {
     charsData,
     damageBy,
     speechBy,
-    latestFrame,
     onReturnToPrepare,
   } = props;
 
@@ -215,11 +213,6 @@ export function BattleScreen(props: {
             </li>
           ))}
         </ul>
-        <CameraDebugPanel
-          latestFrame={latestFrame}
-          allies={allies}
-          charsById={charsById}
-        />
         {heartbeat && heartbeat.type === "heartbeat" && (
           <div
             style={{
@@ -612,88 +605,6 @@ function EmptyHint() {
 
 // 備考: 現状 ResultBanner には mvp_id を渡せていない (App から battle_end を
 // 取り回す配線が未完)。Day 5 で battle_end ハンドラを足して MVP を表示する。
-
-function CameraDebugPanel(props: {
-  latestFrame: Extract<ServerEvent, { type: "aruco_frame" }> | null;
-  allies: Combatant[];
-  charsById: Map<number, Character>;
-}) {
-  const frame = props.latestFrame;
-  // frame.frame_jpeg_b64 は 1280x720 想定だが、image height は表示時に
-  // resized されている可能性がある。簡易のため 720 を割って % にする。
-  const FRAME_H = 720;
-  const thresholdPct = frame
-    ? Math.round((1 - frame.calibration_y_ratio) * 100)
-    : null;
-  // marker_id ごとの最新検出
-  const byMarker = new Map<number, { row: string; cy: number }>();
-  for (const d of frame?.detections ?? []) {
-    byMarker.set(d.marker_id, { row: d.row, cy: d.cy });
-  }
-  // ally.marker_id ごとに engine の row と camera の row を比較
-  const allyRows = props.allies
-    .filter((a) => a.marker_id != null)
-    .map((a) => {
-      const det = byMarker.get(a.marker_id!);
-      return {
-        id: a.id,
-        name: a.name,
-        marker_id: a.marker_id!,
-        engine_row: a.row,
-        detected: det?.row ?? null,
-        cy_pct: det ? Math.round((det.cy / FRAME_H) * 100) : null,
-      };
-    });
-
-  return (
-    <details
-      style={{
-        fontSize: 10,
-        fontFamily: "monospace",
-        background: "rgba(255,255,255,0.03)",
-        borderRadius: 6,
-        padding: "6px 8px",
-        opacity: 0.85,
-      }}
-    >
-      <summary
-        style={{ cursor: "pointer", opacity: 0.7, marginBottom: 4 }}
-      >
-        🛠 検出デバッグ {thresholdPct != null ? `(閾値 ${thresholdPct}%)` : ""}
-      </summary>
-      {!frame && <div style={{ opacity: 0.5 }}>(カメラ待機中)</div>}
-      {frame && allyRows.length === 0 && (
-        <div style={{ opacity: 0.5 }}>(編成中の味方なし)</div>
-      )}
-      {frame &&
-        allyRows.map((a) => {
-          const mismatch = a.detected && a.detected !== a.engine_row;
-          return (
-            <div
-              key={a.id}
-              style={{
-                color: mismatch
-                  ? "#ffd86b"
-                  : a.detected === null
-                    ? "#7b7b7b"
-                    : "#8de0a0",
-                whiteSpace: "nowrap",
-              }}
-            >
-              id{a.marker_id}:{" "}
-              {a.detected ? `cy ${a.cy_pct}% → ${a.detected}` : "未検出"}
-              {a.detected && a.engine_row !== a.detected
-                ? ` (engine: ${a.engine_row} ← sync 待ち)`
-                : ""}
-            </div>
-          );
-        })}
-      <div style={{ marginTop: 4, opacity: 0.55 }}>
-        cy ≥ {thresholdPct ?? "?"}% = front, それ未満 = rear
-      </div>
-    </details>
-  );
-}
 
 function StatusBadges(props: { effects: StatusEffect[]; dots: DotState[] }) {
   const items = [
