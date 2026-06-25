@@ -189,6 +189,7 @@ export function BattleScreen(props: {
             mvpId={battleEnd?.mvp_id ?? null}
             turn={battleEnd?.turn ?? battleState?.turn ?? 0}
             allies={allies}
+            charsById={charsById}
             onRestart={onReturnToPrepare}
           />
         )}
@@ -619,11 +620,13 @@ function ResultBanner(props: {
   mvpId: string | null;
   turn: number;
   allies: Combatant[];
+  charsById: Map<number, Character>;
   onRestart: () => void;
 }) {
   if (!props.result) return null;
   const win = props.result === "win";
   const mvp = props.allies.find((a) => a.id === props.mvpId);
+  const mvpAccent = mvp?.personal_color ?? "#ffd86b";
   return (
     <div
       className="fade-in"
@@ -650,18 +653,48 @@ function ResultBanner(props: {
       {mvp && (
         <div
           style={{
-            fontSize: 14,
-            marginTop: 10,
-            padding: "4px 12px",
-            display: "inline-block",
-            borderRadius: 16,
-            background: mvp.personal_color
-              ? `${mvp.personal_color}44`
-              : "rgba(255,255,255,0.08)",
-            border: `1px solid ${mvp.personal_color ?? "#888"}`,
+            marginTop: 14,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 8,
           }}
         >
-          ✨ ベストパフォーマンス: {mvp.name}
+          <div
+            style={{
+              fontSize: 11,
+              letterSpacing: 6,
+              opacity: 0.7,
+              color: mvpAccent,
+              fontWeight: 700,
+            }}
+          >
+            ✨ BEST PERFORMANCE
+          </div>
+          <CharacterAvatar
+            character={{
+              id: mvp.id,
+              aruco_marker_id: mvp.marker_id ?? 0,
+              personal_color: mvpAccent,
+              cast_image_url:
+                mvp.marker_id != null
+                  ? props.charsById.get(mvp.marker_id)?.cast_image_url ?? null
+                  : null,
+            }}
+            size={96}
+            shape="circle"
+            glow={true}
+          />
+          <div
+            style={{
+              fontSize: 18,
+              fontWeight: 800,
+              letterSpacing: 1,
+              color: mvpAccent,
+            }}
+          >
+            {mvp.name}
+          </div>
         </div>
       )}
       <div style={{ marginTop: 14 }}>

@@ -420,3 +420,89 @@ button {
   font-weight: 800;
   margin: 0 4px;
 }
+
+@keyframes live-start-overlay-anim {
+  0% {
+    opacity: 0;
+  }
+  10%,
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.live-start-overlay {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(255, 126, 182, 0.18),
+      rgba(0, 0, 0, 0.85) 70%
+    ),
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.02) 0 14px,
+      rgba(255, 255, 255, 0) 14px 28px
+    );
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  animation: live-start-overlay-anim 1600ms ease-out forwards;
+}
+
+@keyframes live-start-main-anim {
+  0% {
+    opacity: 0;
+    letter-spacing: 24px;
+    transform: scale(0.7);
+    filter: blur(8px);
+  }
+  18% {
+    opacity: 1;
+    letter-spacing: 8px;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  78% {
+    opacity: 1;
+    letter-spacing: 8px;
+    transform: scale(1);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    letter-spacing: 16px;
+    transform: scale(1.05);
+    filter: blur(2px);
+  }
+}
+
+.live-start-text {
+  text-align: center;
+}
+
+.live-start-sub {
+  font-size: 13px;
+  letter-spacing: 8px;
+  opacity: 0.75;
+  margin-bottom: 14px;
+  font-weight: 700;
+}
+
+.live-start-main {
+  font-size: 88px;
+  font-weight: 900;
+  letter-spacing: 8px;
+  background: linear-gradient(90deg, #ff7eb6, #ffd86b, #7eb6ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 6px 32px rgba(0, 0, 0, 0.55);
+  animation: live-start-main-anim 1600ms ease-out forwards;
+}

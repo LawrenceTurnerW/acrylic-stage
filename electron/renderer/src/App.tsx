@@ -10,6 +10,7 @@ import {
   type UltimateFlashPayload,
 } from "./components/UltimateFlash";
 import { TurnBanner, type TurnBannerPayload } from "./components/TurnBanner";
+import { LiveStartOverlay } from "./components/LiveStartOverlay";
 import { WarningBanner, WarningFlash } from "./components/WarningOverlay";
 import { useGameData } from "./hooks/useGameData";
 import { rollDrop, useInventory } from "./hooks/useInventory";
@@ -118,6 +119,10 @@ export default function App() {
   // ターン開始バナー。turn_banner イベントで seq を更新して再マウントを促す。
   const [turnBanner, setTurnBanner] = useState<TurnBannerPayload | null>(null);
   const turnBannerSeqRef = useRef(0);
+
+  // 編成 → 戦闘の遷移演出。handleReady 成功時に true にしてマウント、
+  // LiveStartOverlay 側で 1.6s 後に onDone → false に戻す。
+  const [showingLiveStart, setShowingLiveStart] = useState(false);
 
   // 「今誰が動いているか」のハイライト。combatant_id ごとに seq を更新して
   // カード周りの halo アニメを再生する。
@@ -411,6 +416,7 @@ export default function App() {
       return;
     }
     setScreen("battle");
+    setShowingLiveStart(true);
   };
 
   // header は毎レンダー生成。useMemo 化していたが deps が gameData / refs を
@@ -520,6 +526,9 @@ export default function App() {
           stage={gameData.stage.current}
           onDone={() => setShowingStageIntro(false)}
         />
+      )}
+      {showingLiveStart && (
+        <LiveStartOverlay onDone={() => setShowingLiveStart(false)} />
       )}
       {turnBanner && screen === "battle" && (
         <TurnBanner

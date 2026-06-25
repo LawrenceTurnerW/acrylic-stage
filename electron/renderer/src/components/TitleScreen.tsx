@@ -50,6 +50,25 @@ export function TitleScreen(props: { onStart: () => void }) {
         編成画面でアクスタを並べてください
       </p>
 
+      <div
+        style={{
+          marginTop: 12,
+          padding: "10px 18px",
+          maxWidth: 520,
+          textAlign: "center",
+          fontSize: 11,
+          lineHeight: 1.7,
+          opacity: 0.6,
+          border: "1px solid #2a2440",
+          borderRadius: 8,
+          background: "rgba(255,255,255,0.02)",
+        }}
+      >
+        本作は <strong>Palette Project</strong> を題材にした個人ファン制作物です。
+        <br />
+        公式とは一切無関係です。二次創作ガイドラインを遵守しています。
+      </div>
+
       {recent.length > 0 && (
         <div
           style={{
