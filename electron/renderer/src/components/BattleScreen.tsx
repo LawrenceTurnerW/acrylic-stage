@@ -401,10 +401,14 @@ function FormationVisual(props: {
   speechBy: SpeechMap;
   actingBy: SeqMap;
 }) {
-  const slots: (Combatant | null)[] = [
-    props.allies[0] ?? null,
-    props.allies[1] ?? null,
-  ];
+  // 警告攻撃を避けるために 4 体片側に寄せる運用があるので、行内のスロット
+  // 数を実勢の人数で確保する (最低 2 = 空きスロット表示の枠)。
+  // 旧実装は固定で 2 だったので、3 人目以降が見切れていた。
+  const count = Math.max(2, props.allies.length);
+  const slots: (Combatant | null)[] = Array.from(
+    { length: count },
+    (_, i) => props.allies[i] ?? null,
+  );
   return (
     <div>
       <div
@@ -417,7 +421,7 @@ function FormationVisual(props: {
       >
         {props.row === "front" ? "前列(被弾↑ / 火力↑)" : "後列(被弾↓)"}
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
         {slots.map((ally, i) => (
           <AllyCard
             // key を `<id>-<row>` にして列移動で必ず再マウント → fade-in で
@@ -448,11 +452,14 @@ function AllyCard(props: {
 }) {
   const a = props.ally;
   const CARD_HEIGHT = 132;
+  // 列に 3 体以上集まる事もあるので min 200px、normal は伸びる flex:"1 0 200px"。
+  // 親に overflowX:auto があるので overflow した分は横スクロールで救う。
+  const CARD_FLEX = "1 0 200px";
   if (!a) {
     return (
       <div
         style={{
-          flex: 1,
+          flex: CARD_FLEX,
           height: CARD_HEIGHT,
           borderRadius: 8,
           border: "1px dashed #3a2d6b",
@@ -479,7 +486,7 @@ function AllyCard(props: {
     <div
       className="fade-in"
       style={{
-        flex: 1,
+        flex: CARD_FLEX,
         height: CARD_HEIGHT,
         padding: 8,
         borderRadius: 8,

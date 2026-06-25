@@ -311,9 +311,9 @@ class BattleEngine:
         """1 ターン分の進行:
         1) DoT 適用 (味方/敵共に、表示は 1 件ずつ間隔を空ける)
         2) ターン経過 gauge 加算 (味方のみ、broadcast 無し)
-        3) 敵 → 味方 の順に素早さ降順で 1 体ずつ行動。
-           「同時にしゃべる」「誰が動いたか分からない」を防ぐため、各行動の
-           間に action_interval_sec の小休止を挟む。
+        3) 敵 (配列順 = 物理的に左→右) → 味方 (後列 → 前列、各列の中では
+           配列順 = 左→右) で 1 体ずつ行動。観客の目線が画面上を順に
+           なめていく形になるよう、わざと固定順にしている。
         4) 警告攻撃の発動 + 状態効果の turns_left 減算
         """
         base_params = self.game_state.characters_cfg.get("base_params", {})
@@ -339,11 +339,8 @@ class BattleEngine:
                 )
                 ally.gain_gauge(base_gain + ally.bonus_gauge_per_turn)
 
-        # 3a) 敵側を素早さ降順で行動
-        enemies_order = sorted(
-            [e for e in self.enemies if not e.downed],
-            key=lambda c: (-c.effective_speed(), random.random()),
-        )
+        # 3a) 敵は配列順 (画面の左→右) でそのまま行動
+        enemies_order = [e for e in self.enemies if not e.downed]
         for actor in enemies_order:
             if self.finished:
                 break
@@ -352,11 +349,15 @@ class BattleEngine:
             await self._take_action(actor)
             await asyncio.sleep(action_interval)
 
-        # 3b) 味方側を素早さ降順で行動
-        allies_order = sorted(
-            [a for a in self.allies if not a.downed],
-            key=lambda c: (-c.effective_speed(), random.random()),
-        )
+        # 3b) 味方は後列 → 前列 の順。各列の中では self.allies の配列順
+        # (= 配置時に front/rear を順に append したので「左→右」)
+        rear_actors = [
+            a for a in self.allies if not a.downed and a.row == "rear"
+        ]
+        front_actors = [
+            a for a in self.allies if not a.downed and a.row == "front"
+        ]
+        allies_order = rear_actors + front_actors
         for actor in allies_order:
             if self.finished:
                 break
