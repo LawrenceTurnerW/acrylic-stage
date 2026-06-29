@@ -5,6 +5,16 @@
 
 ---
 
+## 🎬 デモ
+
+![アクスタを ArUco マーカーで検出する様子](./docs/screenshots/aruco_detection.png)
+
+机に置いたアクスタを USB カメラ + ArUco マーカー(背面に貼付)で認識し、画面の黄色ラインを境に前列/後列を自動判定する。
+
+**▶ プレイ動画 (限定公開):** https://youtu.be/QIUUuxXPDcA
+
+---
+
 ## ⚠️ 重要な注記
 
 - 本プロジェクトは **個人によるファン制作物** であり、**Palette Project 公式とは一切無関係**です
