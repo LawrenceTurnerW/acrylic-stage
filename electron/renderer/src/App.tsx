@@ -9,6 +9,7 @@ import {
   UltimateFlash,
   type UltimateFlashPayload,
 } from "./components/UltimateFlash";
+import { TurnBanner, type TurnBannerPayload } from "./components/TurnBanner";
 import { WarningBanner, WarningFlash } from "./components/WarningOverlay";
 import { useGameData } from "./hooks/useGameData";
 import { rollDrop, useInventory } from "./hooks/useInventory";
@@ -114,6 +115,46 @@ export default function App() {
     setSpeechBy((d) => ({ ...d, [combatantId]: { text, seq } }));
   };
 
+  // ターン開始バナー。turn_banner イベントで seq を更新して再マウントを促す。
+  const [turnBanner, setTurnBanner] = useState<TurnBannerPayload | null>(null);
+  const turnBannerSeqRef = useRef(0);
+
+  // 「今誰が動いているか」のハイライト。combatant_id ごとに seq を更新して
+  // カード周りの halo アニメを再生する。
+  const [actingBy, setActingBy] = useState<Record<string, number>>({});
+  const actingSeqRef = useRef(0);
+  const recordActing = (combatantId: string) => {
+    if (!combatantId) return;
+    actingSeqRef.current += 1;
+    setActingBy((d) => ({ ...d, [combatantId]: actingSeqRef.current }));
+  };
+
+  // 画面上部に出す「攻撃者 → 対象」キャプション。ターン頭でクリア。
+  const [actionCaption, setActionCaption] = useState<{
+    attacker_name: string;
+    attacker_color: string;
+    action_label: string;
+    target_name: string | null;
+    seq: number;
+  } | null>(null);
+  const actionCaptionSeqRef = useRef(0);
+  const showCaption = (
+    attacker_name: string,
+    attacker_color: string,
+    action_label: string,
+    target_name: string | null,
+  ) => {
+    actionCaptionSeqRef.current += 1;
+    setActionCaption({
+      attacker_name,
+      attacker_color,
+      action_label,
+      target_name,
+      seq: actionCaptionSeqRef.current,
+    });
+  };
+
+
   const gameData = useGameData();
   const inv = useInventory();
   // inv も WS クロージャから常に最新を参照したいので ref で併走
@@ -169,6 +210,43 @@ export default function App() {
                 recordDamage(v.ally_id, v.damage);
               }
             }
+            // 「今誰が動いているか」のハイライトとキャプション
+            if (
+              e.kind === "normal_attack" ||
+              e.kind === "ultimate" ||
+              e.kind === "skip"
+            ) {
+              if (e.actor_id) recordActing(e.actor_id);
+            }
+            if (e.kind === "normal_attack") {
+              const charsData = gameDataRef.current.characters;
+              const char = charsData?.characters.find(
+                (c) => c.id === e.actor_id,
+              );
+              const accent = e.actor_is_ally
+                ? char?.personal_color ?? "#ff7eb6"
+                : "#f0a774";
+              showCaption(e.actor_name, accent, "通常攻撃", e.target_name);
+            } else if (e.kind === "ultimate") {
+              const charsData = gameDataRef.current.characters;
+              const char = charsData?.characters.find(
+                (c) => c.id === e.actor_id,
+              );
+              const accent = char?.personal_color ?? "#ffd86b";
+              showCaption(
+                e.actor_name,
+                accent,
+                `必殺技 ${e.ultimate_name}`,
+                e.primary_target_name ?? null,
+              );
+            } else if (e.kind === "skip") {
+              const charsData = gameDataRef.current.characters;
+              const char = charsData?.characters.find(
+                (c) => c.id === e.actor_id,
+              );
+              const accent = char?.personal_color ?? "#888";
+              showCaption(e.actor_name, accent, "寝不足で動けない…", null);
+            }
             // 吹き出し用にセリフを記録 (味方のみ、空文字は無視)
             if (
               (e.kind === "normal_attack" ||
@@ -209,6 +287,15 @@ export default function App() {
                 variant_name: e.variant_name,
                 target_row: e.target_row,
               });
+            }
+            // ターンバナーの表示要求 (ターン切り替えで caption はクリア)
+            if (e.kind === "turn_banner") {
+              turnBannerSeqRef.current += 1;
+              setTurnBanner({
+                turn: e.turn,
+                seq: turnBannerSeqRef.current,
+              });
+              setActionCaption(null);
             }
             // 必殺技なら派手なフラッシュ用にキューに積む
             if (e.kind === "ultimate") {
@@ -305,6 +392,9 @@ export default function App() {
     setDropItem(null);
     setDamageBy({});
     setSpeechBy({});
+    setTurnBanner(null);
+    setActingBy({});
+    setActionCaption(null);
     const equipment = inv.buildEquipmentPayload();
     try {
       const res = await fetch(`${API_BASE}/start_battle`, {
@@ -412,6 +502,8 @@ export default function App() {
             charsData={gameData.characters}
             damageBy={damageBy}
             speechBy={speechBy}
+            actingBy={actingBy}
+            actionCaption={actionCaption}
             onReturnToPrepare={async () => {
               try {
                 await fetch(`${API_BASE}/reset`, { method: "POST" });
@@ -427,6 +519,12 @@ export default function App() {
         <StageIntroOverlay
           stage={gameData.stage.current}
           onDone={() => setShowingStageIntro(false)}
+        />
+      )}
+      {turnBanner && screen === "battle" && (
+        <TurnBanner
+          payload={turnBanner}
+          onDone={() => setTurnBanner(null)}
         />
       )}
       {ultimateQueue.length > 0 && (

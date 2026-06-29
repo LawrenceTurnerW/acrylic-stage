@@ -275,13 +275,23 @@ class BattleEngine:
             )
 
             base_params = self.game_state.characters_cfg.get("base_params", {})
-            turn_interval = float(base_params.get("turn_interval_sec", 5))
+            pre_turn_pause = float(base_params.get("pre_turn_pause_sec", 2.0))
 
             while not self.finished:
-                await asyncio.sleep(turn_interval)
+                self.turn += 1
+                # ターンバナーを先に出してから「考える間」を取る。
+                # ターンバナーのアニメと pause が重なって、観客が次のターンへの
+                # 切り替えを意識するタイミングを作る。
+                await self._broadcast_action(
+                    {
+                        "kind": "turn_banner",
+                        "turn": self.turn,
+                        "message": f"Turn {self.turn}",
+                    }
+                )
+                await asyncio.sleep(pre_turn_pause)
                 if self.finished:
                     break
-                self.turn += 1
                 await self._step_turn()
                 await self._broadcast_state()
                 self._check_end()
@@ -299,15 +309,18 @@ class BattleEngine:
 
     async def _step_turn(self) -> None:
         """1 ターン分の進行:
-        1) DoT 適用 (味方/敵共に)
-        2) ターン経過 gauge 加算 (味方のみ)
-        3) 行動順を確定して各アクター行動
-        4) 状態効果の turns_left 減算
+        1) DoT 適用 (味方/敵共に、表示は 1 件ずつ間隔を空ける)
+        2) ターン経過 gauge 加算 (味方のみ、broadcast 無し)
+        3) 敵 → 味方 の順に素早さ降順で 1 体ずつ行動。
+           「同時にしゃべる」「誰が動いたか分からない」を防ぐため、各行動の
+           間に action_interval_sec の小休止を挟む。
+        4) 警告攻撃の発動 + 状態効果の turns_left 減算
         """
         base_params = self.game_state.characters_cfg.get("base_params", {})
+        action_interval = float(base_params.get("action_interval_sec", 0.2))
 
-        # 1) DoT
-        await self._apply_dot_ticks()
+        # 1) DoT (ティック毎に間を空けて見せる)
+        await self._apply_dot_ticks(action_interval)
         self._check_end()
         if self.finished:
             return
@@ -326,17 +339,32 @@ class BattleEngine:
                 )
                 ally.gain_gauge(base_gain + ally.bonus_gauge_per_turn)
 
-        # 3) 行動順を素早さ降順で確定(同率はランダム並び替え)
-        actors = self._build_action_order()
-        for actor in actors:
+        # 3a) 敵側を素早さ降順で行動
+        enemies_order = sorted(
+            [e for e in self.enemies if not e.downed],
+            key=lambda c: (-c.effective_speed(), random.random()),
+        )
+        for actor in enemies_order:
+            if self.finished:
+                break
+            if actor.downed:
+                continue
+            await self._take_action(actor)
+            await asyncio.sleep(action_interval)
+
+        # 3b) 味方側を素早さ降順で行動
+        allies_order = sorted(
+            [a for a in self.allies if not a.downed],
+            key=lambda c: (-c.effective_speed(), random.random()),
+        )
+        for actor in allies_order:
             if self.finished:
                 break
             if actor.downed:
                 continue
             # 寝不足の行動スキップ
             if (
-                actor.is_ally
-                and actor.condition
+                actor.condition
                 and random.random() < float(actor.condition.get("skip_chance", 0.0))
             ):
                 await self._broadcast_action(
@@ -349,18 +377,10 @@ class BattleEngine:
                         "message": f"{actor.name} は寝不足で動けない…",
                     }
                 )
+                await asyncio.sleep(action_interval)
                 continue
-            # 味方でゲージ満タンなら必殺技
-            if actor.is_ally and actor.gauge >= actor.max_gauge and actor.ultimate:
-                await self._act_ultimate(actor)
-            elif (not actor.is_ally) and actor.is_boss:
-                # ボスはターン頭で警告攻撃を発動するか抽選する
-                fired_warning = await self._maybe_announce_warning(actor)
-                if not fired_warning:
-                    await self._act_normal(actor)
-            else:
-                await self._act_normal(actor)
-            self._check_end()
+            await self._take_action(actor)
+            await asyncio.sleep(action_interval)
 
         # 4) 警告攻撃で fires_on_turn を迎えたものをここで発動
         await self._fire_pending_warnings()
@@ -370,6 +390,18 @@ class BattleEngine:
         #    当ターン中に効くよう、最後にまとめて減らす)
         for c in (*self.allies, *self.enemies):
             c.tick_status_effects()
+
+    async def _take_action(self, actor: Combatant) -> None:
+        """1 アクター分の行動分岐 (味方の必殺/ボスの警告予告/通常攻撃)。"""
+        if actor.is_ally and actor.gauge >= actor.max_gauge and actor.ultimate:
+            await self._act_ultimate(actor)
+        elif (not actor.is_ally) and actor.is_boss:
+            fired_warning = await self._maybe_announce_warning(actor)
+            if not fired_warning:
+                await self._act_normal(actor)
+        else:
+            await self._act_normal(actor)
+        self._check_end()
 
     async def _maybe_announce_warning(self, boss: Combatant) -> bool:
         """ボスのターンに警告攻撃の予告を試みる。
@@ -564,13 +596,19 @@ class BattleEngine:
         for k in to_remove:
             self._pending_warnings.pop(k, None)
 
-    async def _apply_dot_ticks(self) -> None:
-        """DoT を全アクターに適用し、ダメージを broadcast。"""
+    async def _apply_dot_ticks(self, interval: float = 0.0) -> None:
+        """DoT を全アクターに適用し、ダメージを broadcast。
+        interval > 0 のとき、tick 表示間にスリープを入れる(同時表示防止)。
+        """
+        first = True
         for c in (*self.allies, *self.enemies):
             if c.downed:
                 continue
             applied = c.tick_dots()
             for name, dmg in applied:
+                if not first and interval > 0:
+                    await asyncio.sleep(interval)
+                first = False
                 await self._broadcast_action(
                     {
                         "kind": "dot_tick",
@@ -584,14 +622,6 @@ class BattleEngine:
                         "message": f"{c.name} に {name} {dmg}",
                     }
                 )
-
-    def _build_action_order(self) -> list[Combatant]:
-        combined: list[Combatant] = [
-            c for c in (*self.allies, *self.enemies) if not c.downed
-        ]
-        # effective_speed でデバフ反映、同率はランダム並び替え
-        combined.sort(key=lambda c: (-c.effective_speed(), random.random()))
-        return combined
 
     # -------- 内部: アクション --------
 

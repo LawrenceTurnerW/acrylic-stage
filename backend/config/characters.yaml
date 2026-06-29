@@ -308,7 +308,12 @@ base_params:
   starting_tension: 100        # テンション(HP)初期値
   starting_gauge: 0            # 声援ゲージ初期値
   max_gauge: 100               # 必殺発動値のデフォルト(キャラ毎に override 可能)
-  turn_interval_sec: 5         # ターン間隔(秒)
+  # 演出ペース:
+  #  1) ターンバナーを出す → pre_turn_pause_sec 待つ (考える時間)
+  #  2) 敵 → 味方 の順で 1 体ずつ行動。各行動間に action_interval_sec の間
+  #  3) 次のターンへ
+  pre_turn_pause_sec: 2.0
+  action_interval_sec: 0.6
   gauge_per_normal_attack: 20  # 通常攻撃時のゲージ獲得
   gauge_per_hit_taken: 10      # 被弾時のゲージ獲得(全員同タイミング発動を避けるため復活)
   gauge_per_turn: 5            # ターン経過時のゲージ獲得

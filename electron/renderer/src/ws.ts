@@ -209,6 +209,7 @@ export type BattleAction =
       turn: number;
       message: string;
     }
+  | { kind: "turn_banner"; turn: number; message: string }
   | { kind: "system"; message: string };
 
 export type WSStatus = "connecting" | "open" | "closed";

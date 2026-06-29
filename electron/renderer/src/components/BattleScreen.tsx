@@ -18,6 +18,7 @@ import type {
   ServerEvent,
   StatusEffect,
 } from "../ws";
+import type { CSSProperties } from "react";
 import { useMemo } from "react";
 import type {
   Attribute,
@@ -32,6 +33,15 @@ import { SpeechBubble } from "./SpeechBubble";
 
 type DamageMap = Record<string, { damage: number; seq: number }>;
 type SpeechMap = Record<string, { text: string; seq: number }>;
+type SeqMap = Record<string, number>;
+
+export type ActionCaption = {
+  attacker_name: string;
+  attacker_color: string;
+  action_label: string;
+  target_name: string | null;
+  seq: number;
+};
 
 type Formation = { front: number[]; rear: number[] };
 
@@ -44,6 +54,8 @@ export function BattleScreen(props: {
   charsData: CharactersResponse | null;
   damageBy: DamageMap;
   speechBy: SpeechMap;
+  actingBy: SeqMap;
+  actionCaption: ActionCaption | null;
   onReturnToPrepare: () => void;
 }) {
   const {
@@ -55,6 +67,8 @@ export function BattleScreen(props: {
     charsData,
     damageBy,
     speechBy,
+    actingBy,
+    actionCaption,
     onReturnToPrepare,
   } = props;
 
@@ -140,7 +154,12 @@ export function BattleScreen(props: {
           <EmptyHint />
         ) : (
           <>
-            <EnemyArea enemies={enemies} damageBy={damageBy} />
+            <ActionCaptionBar caption={actionCaption} />
+            <EnemyArea
+              enemies={enemies}
+              damageBy={damageBy}
+              actingBy={actingBy}
+            />
             <FormationVisual
               row="front"
               allies={allies.filter((a) => a.row === "front")}
@@ -149,6 +168,7 @@ export function BattleScreen(props: {
               charsById={charsById}
               damageBy={damageBy}
               speechBy={speechBy}
+              actingBy={actingBy}
             />
             <FormationVisual
               row="rear"
@@ -158,6 +178,7 @@ export function BattleScreen(props: {
               charsById={charsById}
               damageBy={damageBy}
               speechBy={speechBy}
+              actingBy={actingBy}
             />
           </>
         )}
@@ -233,7 +254,11 @@ export function BattleScreen(props: {
   );
 }
 
-function EnemyArea(props: { enemies: Combatant[]; damageBy: DamageMap }) {
+function EnemyArea(props: {
+  enemies: Combatant[];
+  damageBy: DamageMap;
+  actingBy: SeqMap;
+}) {
   if (props.enemies.length === 0) {
     return (
       <div style={{ fontSize: 11, opacity: 0.5 }}>(敵情報待機中…)</div>
@@ -257,6 +282,7 @@ function EnemyArea(props: { enemies: Combatant[]; damageBy: DamageMap }) {
             key={e.id}
             enemy={e}
             recentDamage={props.damageBy[e.id] ?? null}
+            actingSeq={props.actingBy[e.id] ?? null}
           />
         ))}
       </div>
@@ -267,8 +293,10 @@ function EnemyArea(props: { enemies: Combatant[]; damageBy: DamageMap }) {
 function EnemyCard(props: {
   enemy: Combatant;
   recentDamage: { damage: number; seq: number } | null;
+  actingSeq: number | null;
 }) {
   const e = props.enemy;
+  const haloColor = e.is_boss ? "#f0a774" : "#ff9b8b";
   return (
     <div
       style={{
@@ -299,7 +327,66 @@ function EnemyCard(props: {
       {e.downed && (
         <div style={{ fontSize: 10, opacity: 0.7, marginTop: 4 }}>撃破</div>
       )}
+      <ActingHalo actingSeq={props.actingSeq} color={haloColor} />
       <DamageOverlay recentDamage={props.recentDamage} />
+    </div>
+  );
+}
+
+// 攻撃中のキャラのカード周囲にリング状のハロを出す。
+// actingSeq が変わる度に再マウントしてアニメを再生する。
+function ActingHalo(props: { actingSeq: number | null; color: string }) {
+  if (props.actingSeq == null) return null;
+  return (
+    <div
+      key={`act-${props.actingSeq}`}
+      className="acting-halo"
+      style={{ ["--halo-color" as string]: props.color } as CSSProperties}
+    />
+  );
+}
+
+// 画面上部に出す「攻撃者 → 行動 → 対象」キャプション。
+// seq が変わる度に再マウントしてポップインアニメが再生される。
+function ActionCaptionBar(props: { caption: ActionCaption | null }) {
+  if (!props.caption) {
+    return (
+      <div
+        style={{
+          minHeight: 28,
+          opacity: 0.35,
+          fontSize: 11,
+          letterSpacing: 1,
+          textAlign: "center",
+        }}
+      >
+        ・・・
+      </div>
+    );
+  }
+  const c = props.caption;
+  return (
+    <div
+      key={`cap-${c.seq}`}
+      className="action-caption"
+      style={{ borderColor: `${c.attacker_color}88` }}
+    >
+      <span
+        style={{
+          color: c.attacker_color,
+          fontWeight: 800,
+        }}
+      >
+        {c.attacker_name}
+      </span>
+      <span className="action-caption-sep">の</span>
+      <span style={{ opacity: 0.95 }}>{c.action_label}</span>
+      {c.target_name && (
+        <>
+          <span className="action-caption-arrow">→</span>
+          <span style={{ fontWeight: 800 }}>{c.target_name}</span>
+        </>
+      )}
     </div>
   );
 }
@@ -312,6 +399,7 @@ function FormationVisual(props: {
   charsById: Map<number, Character>;
   damageBy: DamageMap;
   speechBy: SpeechMap;
+  actingBy: SeqMap;
 }) {
   const slots: (Combatant | null)[] = [
     props.allies[0] ?? null,
@@ -341,6 +429,7 @@ function FormationVisual(props: {
             charsById={props.charsById}
             recentDamage={ally ? props.damageBy[ally.id] ?? null : null}
             recentSpeech={ally ? props.speechBy[ally.id] ?? null : null}
+            actingSeq={ally ? props.actingBy[ally.id] ?? null : null}
           />
         ))}
       </div>
@@ -355,6 +444,7 @@ function AllyCard(props: {
   charsById: Map<number, Character>;
   recentDamage: { damage: number; seq: number } | null;
   recentSpeech: { text: string; seq: number } | null;
+  actingSeq: number | null;
 }) {
   const a = props.ally;
   const CARD_HEIGHT = 132;
@@ -467,6 +557,7 @@ function AllyCard(props: {
         />
         <StatusBadges effects={a.status_effects} dots={a.dots} />
       </div>
+      <ActingHalo actingSeq={props.actingSeq} color={accent} />
       <DamageOverlay recentDamage={props.recentDamage} />
       <SpeechBubble recentSpeech={props.recentSpeech} />
     </div>
