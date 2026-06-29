@@ -7,11 +7,17 @@
 
 ## 🎬 デモ
 
+### ▶ プレイ動画 (YouTube・限定公開)
+
+[![Acrylic Stage プレイ動画](https://img.youtube.com/vi/QIUUuxXPDcA/maxresdefault.jpg)](https://youtu.be/QIUUuxXPDcA)
+
+*サムネイルをクリックすると YouTube で再生されます。*
+
+### アクスタ検出の様子
+
 ![アクスタを ArUco マーカーで検出する様子](./docs/screenshots/aruco_detection.png)
 
 机に置いたアクスタを USB カメラ + ArUco マーカー(背面に貼付)で認識し、画面の黄色ラインを境に前列/後列を自動判定する。
-
-**▶ プレイ動画 (限定公開):** https://youtu.be/QIUUuxXPDcA
 
 ---
 
