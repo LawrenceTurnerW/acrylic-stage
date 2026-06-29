@@ -56,6 +56,10 @@ class BattleEngine:
 
         self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
+        # 戦闘ループが回っているか。schedule_row_sync / update_ally_rows の
+        # ガードに使う。初期化を忘れると AttributeError でカメラの行更新
+        # フックが silent fail するので必ず False から始める。
+        self._running: bool = False
 
     # -------- 公開 API --------
 
@@ -75,6 +79,8 @@ class BattleEngine:
             self.turn = 0
             self.finished = False
             self.result = None
+            self._pending_warnings.clear()
+            self._running = True
             self._task = asyncio.create_task(self._run())
             logger.info(
                 "battle start: allies=%d enemies=%d",
@@ -92,6 +98,7 @@ class BattleEngine:
             await self._stop_unlocked()
 
     async def _stop_unlocked(self) -> None:
+        self._running = False
         if self._task is not None and not self._task.done():
             self._task.cancel()
             try:
@@ -287,6 +294,8 @@ class BattleEngine:
             raise
         except Exception as e:  # noqa: BLE001
             logger.exception("battle loop crashed: %s", e)
+        finally:
+            self._running = False
 
     async def _step_turn(self) -> None:
         """1 ターン分の進行:
