@@ -76,15 +76,22 @@ export function PrepareScreen(props: {
     return Array.from(seen.values());
   }, [frame?.detections]);
 
-  // 左端 (cx 小) から右端 (cx 大) で安定ソート → 2 枠ずつ取る
+  // marker_id 昇順で固定ソート → 2 枠ずつ取る。
+  // 元は cx 昇順 (左→右) にしていたが、cx は ArUco の検出ノイズで毎フレーム
+  // 微妙にぶれて、隣接配置の時にカードがガタガタ入れ替わる。物理的な左右の
+  // 一致より「表示が安定している」方を優先して、ID 順に倒した。
   const front = useMemo(
     () =>
-      detections.filter((d) => d.row === "front").sort((a, b) => a.cx - b.cx),
+      detections
+        .filter((d) => d.row === "front")
+        .sort((a, b) => a.marker_id - b.marker_id),
     [detections],
   );
   const rear = useMemo(
     () =>
-      detections.filter((d) => d.row === "rear").sort((a, b) => a.cx - b.cx),
+      detections
+        .filter((d) => d.row === "rear")
+        .sort((a, b) => a.marker_id - b.marker_id),
     [detections],
   );
 

@@ -422,7 +422,13 @@ function FormationVisual(props: {
       >
         {props.row === "front" ? "前列(被弾↑ / 火力↑)" : "後列(被弾↓)"}
       </div>
-      <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+      {/*
+        ここで overflow:auto を入れていた時期があったが、CSS 仕様で
+        overflow-x:auto は overflow-y も auto 化してしまい、カード上端から
+        飛び出す吹き出しが clip されてしまう問題があった。3 体以上の
+        詰まりはカード側を flex:"1 1 0" で縮めて吸収する方向にする。
+      */}
+      <div style={{ display: "flex", gap: 8 }}>
         {slots.map((ally, i) => (
           <AllyCard
             // key を `<id>-<row>` にして列移動で必ず再マウント → fade-in で
@@ -453,14 +459,16 @@ function AllyCard(props: {
 }) {
   const a = props.ally;
   const CARD_HEIGHT = 132;
-  // 列に 3 体以上集まる事もあるので min 200px、normal は伸びる flex:"1 0 200px"。
-  // 親に overflowX:auto があるので overflow した分は横スクロールで救う。
-  const CARD_FLEX = "1 0 200px";
+  // 列に 3 体以上集まる事もあるので、はみ出さないように shrink:1 で
+  // 余幅を吸収する flex 設定にする (minWidth:0 を併用しないと内側の
+  // テキストで shrink がブロックされる)。
+  const CARD_FLEX = "1 1 0";
   if (!a) {
     return (
       <div
         style={{
           flex: CARD_FLEX,
+          minWidth: 0,
           height: CARD_HEIGHT,
           borderRadius: 8,
           border: "1px dashed #3a2d6b",
@@ -488,6 +496,7 @@ function AllyCard(props: {
       className="fade-in"
       style={{
         flex: CARD_FLEX,
+        minWidth: 0,
         height: CARD_HEIGHT,
         padding: 8,
         borderRadius: 8,
